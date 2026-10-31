@@ -1,0 +1,54 @@
+@import 'tailwindcss';
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e7eae6;
+  --color-muted: #eff1ed;
+  --color-muted-foreground: #69736b;
+  --color-accent: #e7ede7;
+  --color-accent-foreground: #1b3323;
+  --color-destructive: #b13035;
+  --color-border: #e0e5dd;
+  --color-input: #dce2d9;
+  --color-ring: #397d51;
+  --font-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+:root {
+  --background: #f7f8f5;
+  --foreground: #1c2b20;
+  --card: #ffffff;
+  --primary: #2c6542;
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply m-0 bg-background font-sans antialiased;
+  }
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  a {
+    cursor: pointer;
+  }
+  ::selection {
+    background: #b9d4bd;
+    color: #101b16;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

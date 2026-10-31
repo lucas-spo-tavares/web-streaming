@@ -1,0 +1,22 @@
+# Local configuration, identity and secrets (examples are dotenv, not Prettier input).
+**/.env*
+.aws/
+.codex/
+.agents/
+.git/
+**/*.pem
+**/*.key
+# Dependencies and generated artifacts.
+**/node_modules/
+**/dist/
+**/.terraform/
+infra/.build/
+package-lock.json
+**/package-lock.json
+**/*.tfstate*
+**/*.tfplan
+# Terraform owns HCL formatting.
+**/*.tf
+**/*.tfvars
+**/*.hcl
+**/*.tfvars.example

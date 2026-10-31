@@ -1,0 +1,6 @@
+name                    = "meu-acervo-unico"
+region                  = "sa-east-1"
+environment             = "production"
+signing_public_key_path = "/caminho/seguro/cloudfront-public.pem"
+hosted_zone_name        = "lucas-tavares.com"
+frontend_domain_name    = "streaming.lucas-tavares.com"

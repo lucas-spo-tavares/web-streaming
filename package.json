@@ -1,0 +1,36 @@
+{
+  "name": "web-streaming",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "front",
+    "back"
+  ],
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "dev": "npm run dev -w front",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "lint": "eslint front/src back/src",
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm run build",
+    "infra:check": "terraform -chdir=infra fmt -check -recursive && terraform -chdir=infra validate",
+    "env:check": "node scripts/check-env.mjs",
+    "format": "prettier --write \"**/*.{js,cjs,mjs,ts,tsx,mts,cts,json,css,html,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{js,cjs,mjs,ts,tsx,mts,cts,json,css,html,md,yaml,yml}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  }
+}
