@@ -11,6 +11,9 @@
   },
   "scripts": {
     "dev": "npm run dev -w front",
+    "deploy": "npm run deploy:back && npm run deploy:front",
+    "deploy:back": "node scripts/with-env.mjs .env.deploy node scripts/deploy.mjs back",
+    "deploy:front": "node scripts/with-env.mjs .env.deploy node scripts/deploy.mjs front",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint front/src back/src",
@@ -18,17 +21,21 @@
     "infra:check": "terraform -chdir=infra fmt -check -recursive && terraform -chdir=infra validate",
     "env:check": "node scripts/check-env.mjs",
     "format": "prettier --write \"**/*.{js,cjs,mjs,ts,tsx,mts,cts,json,css,html,md,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{js,cjs,mjs,ts,tsx,mts,cts,json,css,html,md,yaml,yml}\""
+    "format:check": "prettier --check \"**/*.{js,cjs,mjs,ts,tsx,mts,cts,json,css,html,md,yaml,yml}\"",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@testing-library/react": "16.3.3",
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "eslint": "10.14.0",
+    "happy-dom": "21.0.4",
     "prettier": "3.9.10",
     "prettier-plugin-tailwindcss": "0.8.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.72.1"
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
   },
   "overrides": {
     "minimatch": "^11.0.1"

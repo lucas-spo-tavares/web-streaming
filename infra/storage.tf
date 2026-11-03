@@ -32,10 +32,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
 resource "aws_s3_bucket_lifecycle_configuration" "media" {
   bucket = aws_s3_bucket.app["media"].id
   rule {
-    id     = "retention-30-days"
+    id     = "abort-incomplete-uploads"
     status = "Enabled"
     filter {}
-    expiration { days = 30 }
     abort_incomplete_multipart_upload { days_after_initiation = 1 }
   }
 }
@@ -57,4 +56,36 @@ resource "aws_s3_bucket_policy" "app" {
     { Sid = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*", Resource = [aws_s3_bucket.app[each.key].arn, "${aws_s3_bucket.app[each.key].arn}/*"], Condition = { Bool = { "aws:SecureTransport" = "false" } } }
   ] })
   depends_on = [aws_s3_bucket_public_access_block.app]
+}
+
+resource "aws_dynamodb_table" "retention" {
+  name         = "${var.name}-retention"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "key"
+  attribute {
+    name = "key"
+    type = "S"
+  }
+  ttl {
+    attribute_name = "purgeAt"
+    enabled        = true
+  }
+  point_in_time_recovery { enabled = false }
+  lifecycle { prevent_destroy = true }
+}
+resource "aws_cloudwatch_event_rule" "cleanup" {
+  name                = "${var.name}-cleanup"
+  schedule_expression = "rate(1 hour)"
+}
+resource "aws_cloudwatch_event_target" "cleanup" {
+  rule      = aws_cloudwatch_event_rule.cleanup.name
+  target_id = "retention-cleanup"
+  arn       = aws_lambda_function.api["cleanup"].arn
+}
+resource "aws_lambda_permission" "cleanup" {
+  statement_id  = "InvokeScheduledCleanup"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.api["cleanup"].function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cleanup.arn
 }

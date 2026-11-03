@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent } from 'react';
+import { Navigate, Route, Routes } from 'react-router';
+import { Player } from './Player';
 import { Film, ArrowUpRight, ShieldCheck, Mail, ArrowLeft } from 'lucide-react';
 import { config, isConfigured } from './config';
 import { AuthClient } from './lib/auth';
@@ -22,7 +24,11 @@ export default function App() {
     () =>
       createApi(
         () => auth.token(),
-        () => auth.clear(),
+        () => {
+          auth.clear();
+          resetLogin();
+          setError('Sua sessão terminou. Entre novamente.');
+        },
       ),
     [],
   );
@@ -31,14 +37,26 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
+    window.addEventListener('storage', auth.syncStorage);
+    return () => window.removeEventListener('storage', auth.syncStorage);
+  }, []);
+  useEffect(() => {
     if (!session) return;
-    const timer = setTimeout(
-      () => {
-        void auth.token().catch(() => setError('Sua sessão terminou. Entre novamente.'));
-      },
-      Math.max(1000, session.expires - Date.now() - 60000),
-    );
-    return () => clearTimeout(timer);
+    const checkExpiry = () => {
+      if (session.expires > Date.now()) return;
+      void auth.token().catch(() => {
+        resetLogin();
+        setError('Sua sessão terminou. Entre novamente.');
+      });
+    };
+    const timer = setTimeout(checkExpiry, Math.max(0, session.expires - Date.now()));
+    window.addEventListener('focus', checkExpiry);
+    document.addEventListener('visibilitychange', checkExpiry);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('focus', checkExpiry);
+      document.removeEventListener('visibilitychange', checkExpiry);
+    };
   }, [session]);
   function resetLogin() {
     auth.cancelChallenge();
@@ -49,13 +67,23 @@ export default function App() {
   }
   if (session)
     return (
-      <Library
-        api={api}
-        logout={() => {
-          auth.logout();
-          resetLogin();
-        }}
-      />
+      <Routes>
+        <Route
+          element={
+            <Library
+              api={api}
+              logout={() => {
+                auth.logout();
+                resetLogin();
+              }}
+            />
+          }
+        >
+          <Route index element={null} />
+          <Route path="watch/:fileName" element={<Player api={api} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
     );
   async function sendCode(event?: FormEvent) {
     event?.preventDefault();
@@ -85,6 +113,8 @@ export default function App() {
     try {
       await auth.confirm(code);
       setCode('');
+      setStep('email');
+      setResendAt(0);
       setNotice('');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Não foi possível confirmar o código.');
@@ -95,7 +125,7 @@ export default function App() {
   const resendSeconds = Math.max(0, Math.ceil((resendAt - clock) / 1000));
   return (
     <main className="grid min-h-screen bg-[#101b16] text-white lg:grid-cols-2">
-      <section className="flex flex-col justify-between px-7 py-9 sm:px-14 lg:min-h-screen lg:p-16">
+      <section className="hidden flex-col justify-between px-7 py-9 sm:px-14 lg:flex lg:min-h-screen lg:p-16">
         <div className="flex items-center gap-3 text-xl font-semibold">
           <Film className="size-6 text-emerald-300" />
           acervo.
@@ -110,8 +140,8 @@ export default function App() {
             <span className="text-emerald-200/70">Onde você estiver.</span>
           </h1>
           <p className="mt-7 max-w-sm text-sm leading-7 text-white/55">
-            Um lugar simples para guardar seus vídeos e gerar links temporários para assistir no
-            VLC.
+            Um lugar simples para guardar seus vídeos e gerar links temporários para assistir no VLC
+            ou no navegador.
           </p>
         </div>
         <p className="flex items-center gap-2 text-xs text-white/50">

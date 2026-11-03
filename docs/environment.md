@@ -27,7 +27,7 @@ Todos os campos são **públicos**, obrigatórios para conectar o app e não pos
 
 | `VITE_AWS_REGION` | Região do Cognito, por exemplo `sa-east-1` |
 
-Depois de provisionar, `node scripts/write-front-env.mjs` gera `front/.env.local` usando somente esses três campos, com validação antes de substituir o arquivo. Outros outputs/segredos são descartados. Uma falha preserva a configuração anterior. Não colocar credenciais AWS, senha, conteúdo de chaves ou valores do Secrets Manager em variáveis `VITE_*`.
+Depois de provisionar, `node scripts/write-front-env.mjs` gera `front/.env.local` usando somente esses três campos, com validação antes de substituir o arquivo. Outros outputs/segredos são descartados. Uma falha preserva a configuração anterior. Não colocar credenciais AWS, senha, conteúdo de chaves ou valores do Parameter Store em variáveis `VITE_*`.
 
 ```sh
 npm run env:check -- --target front --file front/.env.local
@@ -36,25 +36,26 @@ npm run dev
 
 O Vite carrega os arquivos do diretório `front/`. Variáveis já exportadas no processo têm prioridade, seguidas dos arquivos específicos do modo (`.env.[mode].local`, `.env.[mode]`), `.env.local` e `.env`. Não misture valores conflitantes. Reinicie o servidor após editar o ambiente. O build incorpora valores públicos: para mudar a configuração em produção, reconstruir e republicar. Uma configuração ausente ou inválida mantém a tela de configuração pendente, sem bypass de login.
 
-O login usa `EMAIL_OTP` na própria página. Os tokens e o desafio ficam somente em memória, sem cookies ou armazenamento persistente. Recarregar a página exige um novo código.
+O login usa `EMAIL_OTP` na própria página. O access token e seu vencimento são persistidos no `localStorage`, separados por região e app client Cognito. Recarregar mantém uma sessão válida. Expiração ou resposta 401 remove a sessão e retorna ao login, sem renovação automática. Desafio OTP e refresh token ficam somente em memória.
 
 ## Backend
 
 `back/.env.local` serve para validação, sem iniciar API local. Na AWS, o Terraform injeta as variáveis e o runtime fornece `AWS_REGION`. ARNs são referências e não contêm o valor de segredos.
 
-| Variável             | Obrigatória em     | Padrão/origem                                                           | Sensibilidade         |
-| -------------------- | ------------------ | ----------------------------------------------------------------------- | --------------------- |
-| `OPERATION`          | Todas              | `list`, `start`, `parts`, `complete`, `abort`, `stream`, pelo Terraform | Configuração          |
-| `MEDIA_BUCKET`       | Todas              | Bucket criado pelo Terraform                                            | Configuração          |
-| `AWS_REGION`         | Todas              | Runtime Lambda ou região exportada fora dele                            | Configuração          |
-| `TICKET_SECRET_ARN`  | Listagem e uploads | Output `ticket_secret_arn`                                              | Referência ao segredo |
-| `MEDIA_DOMAIN`       | Streaming          | Output `media_domain`, hostname sem esquema/path                        | Público               |
-| `SIGNING_SECRET_ARN` | Streaming          | Output `signing_secret_arn`                                             | Referência ao segredo |
-| `CLOUDFRONT_KEY_ID`  | Streaming          | ID da chave pública no recurso Terraform CloudFront                     | Público               |
-| `APP_ENV`            | Opcional           | `production`; alternativa `acceptance`                                  | Configuração          |
-| `MAX_UPLOAD_BYTES`   | Opcional           | `21474836480` (20 GiB), inteiro entre 1 e esse limite                   | Configuração          |
+| Variável                | Obrigatória em     | Padrão/origem                                                                                                     | Sensibilidade         |
+| ----------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `OPERATION`             | Todas              | `list`, `start`, `parts`, `complete`, `abort`, `stream`, `delete`, `renew`, `download`, `cleanup`, pelo Terraform | Configuração          |
+| `MEDIA_BUCKET`          | Todas              | Bucket criado pelo Terraform                                                                                      | Configuração          |
+| `RETENTION_TABLE`       | Todas              | Tabela `${TF_VAR_name}-retention` criada pelo Terraform                                                           | Configuração          |
+| `AWS_REGION`            | Todas              | Runtime Lambda ou região exportada fora dele                                                                      | Configuração          |
+| `TICKET_PARAMETER_ARN`  | Listagem e uploads | Output `ticket_parameter_arn`                                                                                     | Referência ao segredo |
+| `MEDIA_DOMAIN`          | Streaming          | Output `media_domain`, hostname sem esquema/path                                                                  | Público               |
+| `SIGNING_PARAMETER_ARN` | Streaming          | Output `signing_parameter_arn`                                                                                    | Referência ao segredo |
+| `CLOUDFRONT_KEY_ID`     | Streaming          | ID da chave pública no recurso Terraform CloudFront                                                               | Público               |
+| `APP_ENV`               | Opcional           | `production`; alternativa `acceptance`                                                                            | Configuração          |
+| `MAX_UPLOAD_BYTES`      | Opcional           | `21474836480` (20 GiB), inteiro entre 1 e esse limite                                                             | Configuração          |
 
-Chave privada e segredo HMAC são lidos diretamente do Secrets Manager, nunca de `VITE_*`. A listagem não exige campos de streaming.
+Chave privada e segredo HMAC são lidos diretamente do Parameter Store, nunca de `VITE_*`. A listagem não exige campos de streaming. As operações `delete`, `renew`, `download` e `cleanup` não exigem referências a segredos.
 
 ```sh
 npm run env:check -- --target backend --file back/.env.local

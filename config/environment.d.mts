@@ -18,6 +18,6 @@ export function validateFields(
 export function isRegion(value: string): boolean;
 export function isBucket(value: string): boolean;
 export function isHostname(value: string): boolean;
-export function isSecretArn(value: string): boolean;
+export function isParameterArn(value: string): boolean;
 export function isIntegerIn(value: string, min: number, max: number): boolean;
 export function assertValid(issues: Issue[]): void;

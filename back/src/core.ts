@@ -19,8 +19,9 @@ export function fileInfo(
   created: Date,
   now: number,
   retention = RETENTION_MS,
+  retainedUntil?: Date,
 ): VideoFile {
-  const expires = created.getTime() + retention;
+  const expires = retainedUntil?.getTime() ?? created.getTime() + retention;
   return {
     key,
     name: key.slice(38),
@@ -36,8 +37,16 @@ export function encodeKey(key: string) {
     (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
-export function linkExpiry(created: Date, now: number, retention = RETENTION_MS) {
-  const end = Math.min(now + LINK_MS, created.getTime() + retention);
+export function linkExpiry(
+  created: Date,
+  now: number,
+  retention = RETENTION_MS,
+  retainedUntil?: Date,
+) {
+  const end =
+    Math.floor(
+      Math.min(now + LINK_MS, retainedUntil?.getTime() ?? created.getTime() + retention) / 1000,
+    ) * 1000;
   if (end <= now)
     throw new ApiError(410, 'EXPIRED', 'Retenção encerrada. Exclusão pendente no armazenamento.');
   return Math.floor(end / 1000) * 1000;

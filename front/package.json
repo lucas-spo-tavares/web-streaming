@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --root .. front/test"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "3.1161.0",
@@ -18,6 +19,7 @@
     "lucide-react": "1.66.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-router": "7.18.5",
     "tailwind-merge": "3.7.0"
   },
   "devDependencies": {

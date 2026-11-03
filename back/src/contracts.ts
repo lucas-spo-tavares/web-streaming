@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { videoContentType } from '../../config/video.mjs';
 
 export const MAX_BYTES = 20 * 1024 ** 3;
 export const PART_BYTES = 16 * 1024 ** 2;
@@ -26,13 +27,14 @@ export const startSchema = z
   .object({
     name: nameSchema,
     size: z.number().int().positive(),
-    contentType: z
-      .string()
-      .regex(/^[\w.+-]+\/[\w.+-]+$/)
-      .max(100)
-      .default('application/octet-stream'),
+    contentType: z.string().max(100).default(''),
   })
-  .strict();
+  .strict()
+  .refine((data) => videoContentType(data.name, data.contentType) !== null, {
+    message: 'Envie apenas arquivos de vídeo com extensão e tipo compatíveis.',
+    path: ['contentType'],
+  })
+  .transform((data) => ({ ...data, contentType: videoContentType(data.name, data.contentType)! }));
 export const ticketSchema = z.string().min(10).max(8192);
 export const partsSchema = z
   .object({
@@ -54,6 +56,9 @@ export const completeSchema = z
   })
   .strict();
 export const abortSchema = z.object({ ticket: ticketSchema }).strict();
+export const renewSchema = z.object({ key: keySchema }).strict();
+export const downloadSchema = z.object({ key: keySchema }).strict();
+export const deleteSchema = z.object({ key: keySchema }).strict();
 export const streamSchema = z.object({ key: keySchema }).strict();
 export const listSchema = z
   .object({ q: z.string().max(220).default(''), cursor: z.string().max(16384).optional() })

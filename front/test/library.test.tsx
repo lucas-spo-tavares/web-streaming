@@ -1,0 +1,107 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { Library } from '../src/Library';
+import type { LibraryApi } from '../src/lib/api';
+
+const file = {
+  key: '12345678-1234-4123-8123-123456789abc--vídeo.mp4',
+  name: 'vídeo.mp4',
+  size: 100,
+  createdAt: new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 86400000).toISOString(),
+  expired: false,
+};
+const page = { files: [file], nextCursor: null, serverNow: new Date().toISOString() };
+function setup(expired = false) {
+  const api: LibraryApi = {
+    list: vi.fn(async () => ({
+      ...page,
+      serverNow: new Date().toISOString(),
+      files: [
+        { ...file, expiresAt: new Date(Date.now() + (expired ? -1000 : 86400000)).toISOString() },
+      ],
+    })),
+    renew: vi.fn(async () => ({
+      file: { ...file, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString() },
+      serverNow: new Date().toISOString(),
+    })),
+    download: vi.fn(async () => ({
+      url: 'https://s3.acervo.test/signed-download',
+      expiresAt: file.expiresAt,
+      serverNow: page.serverNow,
+    })),
+    start: vi.fn(),
+    parts: vi.fn(),
+    complete: vi.fn(),
+    abort: vi.fn(),
+    delete: vi.fn(),
+    stream: vi.fn(),
+  };
+  render(
+    <MemoryRouter>
+      <Routes>
+        <Route element={<Library api={api} logout={vi.fn()} />}>
+          <Route index element={null} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
+  return api;
+}
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+describe('file actions', () => {
+  it('renews the selected video and refreshes its expiry', async () => {
+    const api = setup();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reiniciar expiração de vídeo.mp4' }),
+    );
+    await waitFor(() => expect(api.renew).toHaveBeenCalledWith(file.key));
+    expect(await screen.findByText(/Prazo de vídeo.mp4 reiniciado/)).toBeTruthy();
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+  });
+  it('starts a direct download using the signed URL and original name', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      expect(this.href).toBe('https://s3.acervo.test/signed-download');
+      expect(this.download).toBe(file.name);
+    });
+    const api = setup();
+    fireEvent.click(await screen.findByRole('button', { name: 'Baixar vídeo.mp4' }));
+    await waitFor(() => expect(click).toHaveBeenCalledOnce());
+    expect(api.download).toHaveBeenCalledWith(file.key);
+    expect(screen.getByText('Download de vídeo.mp4 iniciado.')).toBeTruthy();
+  });
+  it('allows renewing a pending expired video while blocking download', async () => {
+    setup(true);
+    const button = await screen.findByRole('button', { name: 'Baixar vídeo.mp4' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Reiniciar expiração de vídeo.mp4',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+  it('reports a renewal failure and re-enables the actions', async () => {
+    const api = setup();
+    vi.mocked(api.renew).mockRejectedValue(new Error('Não foi possível renovar.'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reiniciar expiração de vídeo.mp4' }),
+    );
+    expect(await screen.findByText('Não foi possível renovar.')).toBeTruthy();
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Reiniciar expiração de vídeo.mp4',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+  });
+});

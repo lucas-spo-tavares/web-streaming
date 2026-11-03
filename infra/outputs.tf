@@ -5,8 +5,8 @@ output "media_bucket" { value = aws_s3_bucket.app["media"].id }
 output "media_domain" { value = aws_cloudfront_distribution.media.domain_name }
 output "front_distribution_id" { value = aws_cloudfront_distribution.front.id }
 output "user_pool_id" { value = aws_cognito_user_pool.owner.id }
-output "ticket_secret_arn" { value = aws_secretsmanager_secret.ticket.arn }
-output "signing_secret_arn" { value = aws_secretsmanager_secret.signing.arn }
+output "ticket_parameter_arn" { value = aws_ssm_parameter.ticket.arn }
+output "signing_parameter_arn" { value = aws_ssm_parameter.signing.arn }
 output "frontend_config" {
   value = {
     VITE_API_URL    = aws_apigatewayv2_api.app.api_endpoint

@@ -1,3 +1,4 @@
+import { videoContentType } from '../../../config/video.mjs';
 import { ApiError, type LibraryApi, type UploadSession } from './api';
 export type UploadState = {
   name: string;
@@ -68,6 +69,10 @@ export class UploadJob {
   }
   async run() {
     if (this.running || this.cancelled) return;
+    if (!videoContentType(this.file.name, this.file.type)) {
+      this.update('error', 'Envie apenas arquivos de vídeo com extensão e tipo compatíveis.');
+      return;
+    }
     if (this.file.size < 1 || this.file.size > 20 * 1024 ** 3) {
       this.update('error', 'Selecione um arquivo de até 20 GiB, com tamanho maior que zero.');
       return;

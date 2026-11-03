@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import {
   abortSchema,
   completeSchema,
+  deleteSchema,
+  renewSchema,
+  downloadSchema,
   keySchema,
   listSchema,
   MAX_BYTES,
@@ -29,6 +32,8 @@ export interface StoredObject {
   size: number;
   created: Date;
   metadata?: Record<string, string>;
+  expires?: Date;
+  deleting?: boolean;
 }
 export interface StoredPart {
   partNumber: number;
@@ -36,6 +41,9 @@ export interface StoredPart {
   etag: string;
 }
 export interface Storage {
+  renew(key: string, until: Date): Promise<boolean>;
+  deleteExpired(key: string, now: number): Promise<boolean>;
+  delete(key: string): Promise<void>;
   list(token?: string): Promise<{ objects: StoredObject[]; token?: string }>;
   head(key: string): Promise<StoredObject | null>;
   start(key: string, contentType: string, metadata: Record<string, string>): Promise<string>;
@@ -52,6 +60,7 @@ export interface Dependencies {
   storage: Storage;
   ticketSecret(): Promise<string>;
   signStream(url: string, expires: number): Promise<string>;
+  signDownload(key: string, name: string, expires: number): Promise<string>;
   mediaDomain: string;
   now?: () => number;
   maxBytes?: number;
@@ -61,6 +70,9 @@ export function createService(d: Dependencies) {
   const now = d.now ?? Date.now;
   const maxBytes = d.maxBytes ?? MAX_BYTES;
   const retention = d.retentionMs ?? RETENTION_MS;
+  function info(object: StoredObject, serverNow = now()) {
+    return fileInfo(object.key, object.size, object.created, serverNow, retention, object.expires);
+  }
   async function ticket(value: string, sub: string) {
     return readUpload(value, await d.ticketSecret(), sub, now());
   }
@@ -86,8 +98,8 @@ export function createService(d: Dependencies) {
       const serverNow = now();
       return {
         files: page.objects
-          .filter((o) => keySchema.safeParse(o.key).success)
-          .map((o) => fileInfo(o.key, o.size, o.created, serverNow, retention))
+          .filter((o) => !o.deleting && keySchema.safeParse(o.key).success)
+          .map((o) => info(o, serverNow))
           .filter((f) => f.name.toLowerCase().includes(q)),
         nextCursor: page.token
           ? seal({ kind: 'cursor', sub, q, token: page.token, exp: serverNow + 3600000 }, secret)
@@ -150,8 +162,7 @@ export function createService(d: Dependencies) {
       const data = completeSchema.parse(input);
       const t = await ticket(data.ticket, sub);
       const already = await existing(t);
-      if (already)
-        return { file: fileInfo(t.key, already.size, already.created, now(), retention) };
+      if (already) return { file: info(already) };
       const count = Math.ceil(t.size / t.partSize);
       if (data.parts.length !== count) throw invalid();
       const parts = [...data.parts].sort((a, b) => a.partNumber - b.partNumber);
@@ -179,7 +190,7 @@ export function createService(d: Dependencies) {
           'UPLOAD_UNCONFIRMED',
           'Não foi possível confirmar o envio. Tente concluir novamente.',
         );
-      return { file: fileInfo(t.key, object.size, object.created, now(), retention) };
+      return { file: info(object) };
     },
     async abort(input: unknown, sub: string) {
       const data = abortSchema.parse(input);
@@ -187,12 +198,45 @@ export function createService(d: Dependencies) {
       await d.storage.abort(t.key, t.uploadId);
       return { aborted: true };
     },
+    async delete(input: unknown) {
+      const { key } = deleteSchema.parse(input);
+      await d.storage.delete(key);
+      return { deleted: true };
+    },
+    async renew(input: unknown) {
+      const { key } = renewSchema.parse(input);
+      const object = await d.storage.head(key);
+      if (!object || object.deleting) throw missing();
+      const serverNow = now();
+      const expires = new Date(serverNow + retention);
+      if (!(await d.storage.renew(key, expires)))
+        throw new ApiError(409, 'DELETION_STARTED', 'A exclusão deste arquivo já começou.');
+      return {
+        file: info({ ...object, expires }, serverNow),
+        serverNow: new Date(serverNow).toISOString(),
+      };
+    },
+    async download(input: unknown) {
+      const { key } = downloadSchema.parse(input);
+      const object = await d.storage.head(key);
+      if (!object || object.deleting) throw missing();
+      const serverNow = now();
+      const expiry = Math.min(
+        linkExpiry(object.created, serverNow, retention, object.expires),
+        serverNow + 15 * 60000,
+      );
+      return {
+        url: await d.signDownload(key, key.slice(38), expiry),
+        expiresAt: new Date(expiry).toISOString(),
+        serverNow: new Date(serverNow).toISOString(),
+      };
+    },
     async stream(input: unknown) {
       const { key } = streamSchema.parse(input);
       const object = await d.storage.head(key);
-      if (!object) throw missing();
+      if (!object || object.deleting) throw missing();
       const serverNow = now();
-      const expiry = linkExpiry(object.created, serverNow, retention);
+      const expiry = linkExpiry(object.created, serverNow, retention, object.expires);
       return {
         url: await d.signStream(`https://${d.mediaDomain}/${encodeKey(key)}`, expiry),
         expiresAt: new Date(expiry).toISOString(),
@@ -200,4 +244,26 @@ export function createService(d: Dependencies) {
       };
     },
   };
+}
+
+export async function expireFiles(d: Dependencies) {
+  const now = d.now ?? Date.now;
+  const retention = d.retentionMs ?? RETENTION_MS;
+  let token: string | undefined;
+  let deleted = 0;
+  do {
+    const page = await d.storage.list(token);
+    for (const object of page.objects) {
+      if (!keySchema.safeParse(object.key).success) continue;
+      const timestamp = now();
+      if (
+        !object.deleting &&
+        (object.expires?.getTime() ?? object.created.getTime() + retention) > timestamp
+      )
+        continue;
+      if (await d.storage.deleteExpired(object.key, timestamp)) deleted++;
+    }
+    token = page.token;
+  } while (token);
+  return { deleted };
 }

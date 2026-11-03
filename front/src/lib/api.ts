@@ -1,4 +1,4 @@
-import type { FilePage } from '../../../back/src/contracts';
+import type { FilePage, VideoFile } from '../../../back/src/contracts';
 import { config } from '@/config';
 export type { VideoFile, FilePage } from '../../../back/src/contracts';
 export class ApiError extends Error {
@@ -30,13 +30,21 @@ export interface LibraryApi {
   ): Promise<{ parts: { partNumber: number; url: string }[] }>;
   complete(ticket: string, parts: { partNumber: number; etag: string }[]): Promise<unknown>;
   abort(ticket: string): Promise<unknown>;
-  stream(key: string): Promise<StreamLink>;
+  renew(key: string): Promise<{ file: VideoFile; serverNow: string }>;
+  download(key: string): Promise<StreamLink>;
+  delete(key: string): Promise<{ deleted: true }>;
+  stream(key: string, signal?: AbortSignal): Promise<StreamLink>;
 }
 export function createApi(token: () => Promise<string>, unauthorized: () => void): LibraryApi {
-  async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  async function request<T>(
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+    method = body === undefined ? 'GET' : 'POST',
+  ): Promise<T> {
     const access = await token();
     const response = await fetch(`${config.apiUrl}${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
+      method,
       headers: {
         Authorization: `Bearer ${access}`,
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
@@ -72,6 +80,9 @@ export function createApi(token: () => Promise<string>, unauthorized: () => void
     parts: (ticket, partNumbers) => request('/uploads/parts', { ticket, partNumbers }),
     complete: (ticket, parts) => request('/uploads/complete', { ticket, parts }),
     abort: (ticket) => request('/uploads/abort', { ticket }),
-    stream: (key) => request('/stream-links', { key }),
+    renew: (key) => request('/files/renew', { key }),
+    download: (key) => request('/download-links', { key }),
+    delete: (key) => request('/files', { key }, undefined, 'DELETE'),
+    stream: (key, signal) => request('/stream-links', { key }, signal),
   };
 }

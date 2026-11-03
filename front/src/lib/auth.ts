@@ -43,12 +43,42 @@ export class AuthClient {
   private session: Session | null = null;
   private challenge: Challenge | null = null;
   private listeners = new Set<() => void>();
-  private refreshPromise: Promise<string> | null = null;
+  private readonly storageKey: string;
   private client: CognitoIdentityProviderClient;
   private generation = 0;
   constructor(private config: AppConfig) {
     this.client = new CognitoIdentityProviderClient({ region: config.region || 'sa-east-1' });
+    this.storageKey = `acervo.session.${config.region}.${config.clientId}`;
+    this.restore();
   }
+  restore() {
+    let restored: Session | null = null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.storageKey) ?? 'null');
+      if (
+        saved &&
+        typeof saved.accessToken === 'string' &&
+        saved.accessToken.trim().length > 0 &&
+        Number.isFinite(saved.expires) &&
+        saved.expires > Date.now()
+      ) {
+        restored = { accessToken: saved.accessToken, expires: saved.expires };
+      } else {
+        localStorage.removeItem(this.storageKey);
+      }
+    } catch {
+      try {
+        localStorage.removeItem(this.storageKey);
+      } catch {
+        /* Storage may be unavailable. */
+      }
+    }
+    this.session = restored;
+    this.emit();
+  }
+  syncStorage = (event: StorageEvent) => {
+    if (event.key === this.storageKey || event.key === null) this.restore();
+  };
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -63,6 +93,11 @@ export class AuthClient {
     this.generation++;
     this.session = null;
     this.challenge = null;
+    try {
+      localStorage.removeItem(this.storageKey);
+    } catch {
+      /* Keep logout available without storage. */
+    }
     this.emit();
   }
   cancelChallenge() {
@@ -128,49 +163,38 @@ export class AuthClient {
     this.accept(result.AuthenticationResult);
     this.challenge = null;
   }
-  private accept(tokens?: AuthenticationResultType, refreshToken?: string) {
+  private accept(tokens?: AuthenticationResultType) {
     if (!tokens?.AccessToken || !Number.isFinite(tokens.ExpiresIn) || tokens.ExpiresIn! <= 0)
       throw new Error('Resposta de autenticação inválida.');
     this.session = {
       accessToken: tokens.AccessToken,
-      refreshToken: tokens.RefreshToken ?? refreshToken,
+      refreshToken: tokens.RefreshToken,
       expires: Date.now() + tokens.ExpiresIn! * 1000,
     };
+    try {
+      localStorage.setItem(
+        this.storageKey,
+        JSON.stringify({
+          accessToken: this.session.accessToken,
+          expires: this.session.expires,
+        }),
+      );
+    } catch {
+      /* A valid login still works in memory when storage is unavailable. */
+    }
     this.emit();
     return tokens.AccessToken;
   }
   async token(): Promise<string> {
     const current = this.session;
     if (!current) throw new Error('Entre para continuar.');
-    if (current.expires > Date.now() + 60000) return current.accessToken;
-    if (!current.refreshToken) {
+    if (current.expires <= Date.now()) {
       this.clear();
       throw new Error('Sua sessão terminou. Entre novamente.');
     }
-    if (!this.refreshPromise) {
-      const refreshToken = current.refreshToken;
-      this.refreshPromise = this.client
-        .send(
-          new InitiateAuthCommand({
-            ClientId: this.config.clientId,
-            AuthFlow: 'REFRESH_TOKEN_AUTH',
-            AuthParameters: { REFRESH_TOKEN: refreshToken },
-          }),
-        )
-        .then((result) => {
-          if (this.session !== current) throw new Error('Sessão encerrada.');
-          return this.accept(result.AuthenticationResult, refreshToken);
-        })
-        .catch(() => {
-          if (this.session === current) this.clear();
-          throw new Error('Sua sessão terminou. Entre novamente.');
-        })
-        .finally(() => {
-          this.refreshPromise = null;
-        });
-    }
-    return this.refreshPromise;
+    return current.accessToken;
   }
+
   logout() {
     const refreshToken = this.session?.refreshToken;
     this.clear();

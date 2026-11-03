@@ -1,6 +1,17 @@
 // Pure validation shared by CLI, Vite and Lambda. No filesystem, process or network access.
 export const FRONT_KEYS = ['VITE_API_URL', 'VITE_CLIENT_ID', 'VITE_AWS_REGION'];
-export const OPERATIONS = ['list', 'start', 'parts', 'complete', 'abort', 'stream'];
+export const OPERATIONS = [
+  'list',
+  'start',
+  'parts',
+  'complete',
+  'abort',
+  'stream',
+  'delete',
+  'renew',
+  'download',
+  'cleanup',
+];
 export const MAX_UPLOAD_BYTES = 21474836480;
 export const REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d+$/;
 const placeholder = /PREENCHA|REPLACE_ME|YOUR_|EXAMPLE|[<>]/i;
@@ -31,10 +42,8 @@ export function isHostname(value) {
     value.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))
   );
 }
-export function isSecretArn(value) {
-  return /^arn:aws(?:-us-gov|-cn)?:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/.test(
-    value,
-  );
+export function isParameterArn(value) {
+  return /^arn:aws(?:-us-gov|-cn)?:ssm:[a-z0-9-]+:\d{12}:parameter\/[a-zA-Z0-9/_.-]+$/.test(value);
 }
 export function isIntegerIn(value, min, max) {
   return (
@@ -83,7 +92,12 @@ export function validateBackend(env, operation = env.OPERATION) {
   const rules = {
     OPERATION: {
       check: (value) => OPERATIONS.includes(value),
-      message: 'Escolha list, start, parts, complete, abort ou stream.',
+      message:
+        'Escolha list, start, parts, complete, abort, stream, delete, renew, download ou cleanup.',
+    },
+    RETENTION_TABLE: {
+      check: (value) => /^[a-zA-Z0-9_.-]{3,255}$/.test(value),
+      message: 'Informe a tabela DynamoDB de retenção.',
     },
     MEDIA_BUCKET: { check: isBucket, message: 'Informe o nome do bucket S3 de mídia.' },
     AWS_REGION: {
@@ -96,17 +110,17 @@ export function validateBackend(env, operation = env.OPERATION) {
       check: isHostname,
       message: 'Informe o hostname CloudFront sem esquema nem caminho.',
     };
-    rules.SIGNING_SECRET_ARN = {
-      check: isSecretArn,
+    rules.SIGNING_PARAMETER_ARN = {
+      check: isParameterArn,
       message: 'Informe o ARN do segredo de assinatura.',
     };
     rules.CLOUDFRONT_KEY_ID = {
       check: (value) => /^[a-zA-Z0-9]{1,128}$/.test(value),
       message: 'Informe o ID da chave pública CloudFront.',
     };
-  } else if (OPERATIONS.includes(operation)) {
-    rules.TICKET_SECRET_ARN = {
-      check: isSecretArn,
+  } else if (['list', 'start', 'parts', 'complete', 'abort'].includes(operation)) {
+    rules.TICKET_PARAMETER_ARN = {
+      check: isParameterArn,
       message: 'Informe o ARN do segredo HMAC de tickets.',
     };
   }

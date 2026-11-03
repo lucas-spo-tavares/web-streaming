@@ -1,12 +1,15 @@
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { ZodError } from 'zod';
 import { ApiError } from './core.js';
-import { createService, type Dependencies } from './service.js';
+import { createService, expireFiles, type Dependencies } from './service.js';
 import { awsDependencies } from './aws.js';
 
 type Event = APIGatewayProxyEventV2WithJWTAuthorizer;
 const routes: Record<string, string> = {
   'GET /files': 'list',
+  'DELETE /files': 'delete',
+  'POST /files/renew': 'renew',
+  'POST /download-links': 'download',
   'POST /uploads': 'start',
   'POST /uploads/parts': 'parts',
   'POST /uploads/complete': 'complete',
@@ -84,3 +87,9 @@ export function createHandler(
   };
 }
 export const handler = createHandler(awsDependencies, process.env.OPERATION);
+
+export async function cleanup() {
+  const result = await expireFiles(awsDependencies());
+  console.info(JSON.stringify({ operation: 'cleanup', ...result }));
+  return result;
+}

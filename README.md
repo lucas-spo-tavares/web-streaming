@@ -22,8 +22,8 @@ flowchart LR
   Browser[Front React] -->|Login| Cognito[Cognito]
   Browser -->|Access token| API[API Gateway]
   API --> Lambda[Lambdas Node.js]
-  Lambda -->|Listagem e controle de uploads| S3[S3 privado de vídeos]
-  Lambda --> Secrets[Secrets Manager]
+  Lambda -->|Listagem, exclusão e controle de uploads| S3[S3 privado de vídeos]
+  Lambda --> Secrets[Parameter Store]
   Browser -->|Upload direto com URLs assinadas| S3
   VLC[VLC] -->|URL temporária| CDN[CloudFront de mídia]
   CDN -->|OAC| S3
@@ -58,7 +58,7 @@ A tela da biblioteca reúne busca, envio de arquivos, tamanho, data, prazo de ex
 | `front/src/components/ui/` | Componentes shadcn/ui                                 |
 | `front/src/index.css`      | Tema e estilos Tailwind                               |
 
-O email e o código são informados na própria página. O front usa `USER_AUTH` com `EMAIL_OTP`, sem redirecionamento para o login hospedado. Access token, refresh token e desafio OTP ficam somente em memória: não há cookies, localStorage ou sessionStorage. Ao recarregar, é necessário solicitar um novo código.
+O email e o código são informados na própria página. O front usa `USER_AUTH` com `EMAIL_OTP`, sem redirecionamento para o login hospedado. O access token e seu vencimento ficam no `localStorage`, em uma chave específica da região e do app client Cognito, mantendo a sessão ao recarregar. Quando o token expira ou a API responde 401, a sessão persistida é removida e a tela de login reaparece. Não há renovação automática do token; desafio OTP e refresh token ficam somente em memória.
 
 ### Back
 
@@ -66,16 +66,17 @@ O workspace `back/` usa TypeScript, Node.js 22, AWS SDK v3 e Zod. O esbuild gera
 
 Todas as rotas exigem um access token válido do Cognito, associação ao grupo `owners`.
 
-| Método | Rota                | Função                                    |
-| ------ | ------------------- | ----------------------------------------- |
-| `GET`  | `/files?q=&cursor=` | Listar e buscar arquivos com paginação    |
-| `POST` | `/uploads`          | Iniciar uma sessão de upload multipart    |
-| `POST` | `/uploads/parts`    | Gerar URLs temporárias para enviar partes |
-| `POST` | `/uploads/complete` | Validar as partes e concluir o upload     |
-| `POST` | `/uploads/abort`    | Cancelar um upload                        |
-| `POST` | `/stream-links`     | Gerar um link assinado de streaming       |
+| Método   | Rota                | Função                                    |
+| -------- | ------------------- | ----------------------------------------- |
+| `GET`    | `/files?q=&cursor=` | Listar e buscar arquivos com paginação    |
+| `DELETE` | `/files`            | Excluir um arquivo                        |
+| `POST`   | `/uploads`          | Iniciar uma sessão de upload multipart    |
+| `POST`   | `/uploads/parts`    | Gerar URLs temporárias para enviar partes |
+| `POST`   | `/uploads/complete` | Validar as partes e concluir o upload     |
+| `POST`   | `/uploads/abort`    | Cancelar um upload                        |
+| `POST`   | `/stream-links`     | Gerar um link assinado de streaming       |
 
-`handler.ts` trata HTTP e autorização, `service.ts` implementa as operações, `aws.ts` integra os serviços AWS e `contracts.ts` define os contratos. Cada operação é implantada em uma Lambda com suas próprias permissões IAM.
+`handler.ts` trata HTTP e autorização, `service.ts` implementa as operações, `aws.ts` integra os serviços AWS e `contracts.ts` define os contratos. Cada operação é implantada em uma Lambda com suas próprias permissões IAM. A exclusão usa `DELETE /files`, com uma Lambda dedicada e permissão `s3:DeleteObject` apenas no bucket de mídia. O botão Excluir pede confirmação antes de remover o arquivo.
 
 O backend executa na AWS; não existe um servidor HTTP local para ele. O arquivo `back/.env.example` documenta o runtime e permite validar a configuração, mas não inicia a API.
 
@@ -85,17 +86,18 @@ O contrato completo está em [docs/api.md](docs/api.md).
 
 O diretório `infra/` provisiona:
 
-| Recurso              | Papel                                                            |
-| -------------------- | ---------------------------------------------------------------- |
-| S3 de mídia          | Armazenamento privado, criptografia e Lifecycle de 30 dias       |
-| S3 do front          | Armazenamento privado dos arquivos estáticos do build            |
-| CloudFront do front  | Entrega da aplicação, HTTPS e fallback da SPA                    |
-| CloudFront de mídia  | Entrega privada com URLs assinadas e suporte a requisições Range |
-| Cognito              | Login do proprietário e grupo `owners`                           |
-| API Gateway + Lambda | Operações autenticadas da biblioteca                             |
-| Secrets Manager      | Chave privada de assinatura e segredo dos tickets de upload      |
-| IAM + CloudWatch     | Permissões por operação e logs com retenção de 14 dias           |
-| Route 53 + ACM       | Subdomínio do front e certificado HTTPS                          |
+| Recurso                | Papel                                                            |
+| ---------------------- | ---------------------------------------------------------------- |
+| S3 de mídia            | Armazenamento privado e criptografia dos vídeos                  |
+| S3 do front            | Armazenamento privado dos arquivos estáticos do build            |
+| CloudFront do front    | Entrega da aplicação, HTTPS e fallback da SPA                    |
+| CloudFront de mídia    | Entrega privada com URLs assinadas e suporte a requisições Range |
+| Cognito                | Login do proprietário e grupo `owners`                           |
+| DynamoDB + EventBridge | Prazos renováveis e agendamento da limpeza de vídeos             |
+| API Gateway + Lambda   | Operações autenticadas da biblioteca                             |
+| Parameter Store        | Chave privada de assinatura e segredo dos tickets de upload      |
+| IAM + CloudWatch       | Permissões por operação e logs com retenção de 14 dias           |
+| Route 53 + ACM         | Subdomínio do front e certificado HTTPS                          |
 
 A região padrão da aplicação é `sa-east-1`. O certificado do CloudFront é criado em `us-east-1`. A zona pública `lucas-tavares.com` deve existir na conta; o Terraform cria os registros A/AAAA de `streaming.lucas-tavares.com` e a validação DNS de um certificado dedicado ao app.
 
@@ -106,7 +108,7 @@ O certificado e os registros do portfolio permanecem sob responsabilidade daquel
 Pré-requisitos:
 
 - Node.js **22.16+** e npm **10+**.
-- Terraform **1.10+** para trabalhar com infraestrutura.
+- Terraform **1.11+** para trabalhar com infraestrutura.
 - AWS CLI v2 e OpenSSL para realizar o deploy.
 
 Na raiz do monorepo:
@@ -179,7 +181,7 @@ openssl genrsa -out "$ACERVO_KEYS_DIR/cloudfront-private.pem" 2048
 openssl rsa -in "$ACERVO_KEYS_DIR/cloudfront-private.pem" -pubout -out "$ACERVO_KEYS_DIR/cloudfront-public.pem"
 ```
 
-A chave pública será fornecida ao Terraform. A privada será inserida diretamente no Secrets Manager, sem passar pelo state.
+A chave pública será fornecida ao Terraform. A privada será inserida diretamente no Parameter Store, sem passar pelo state.
 
 ### 3. Preencher o ambiente de deploy
 
@@ -253,9 +255,9 @@ npm run env:check -- --target deploy --stage secrets
 node scripts/init-secrets.mjs
 ```
 
-O script lê a chave privada de `ACERVO_SIGNING_PRIVATE_KEY_PATH`, obtém os ARNs pelos outputs e grava a chave e um segredo HMAC no Secrets Manager.
+O script lê a chave privada de `ACERVO_SIGNING_PRIVATE_KEY_PATH`, obtém os ARNs pelos outputs e grava a chave e um segredo HMAC como `SecureString` no Parameter Store, no nível `Standard`, com a chave KMS gerenciada `alias/aws/ssm`. Valores já inicializados são preservados.
 
-**Não execute esse script a cada deploy.** Regenerar o segredo HMAC invalida os tickets de upload e os cursores ainda ativos. A rotação de chaves está descrita no [guia de operação](docs/deployment.md#rotação-de-chaves).
+O script preenche apenas os marcadores do primeiro setup e preserva valores existentes quando executado novamente. Trocar o segredo HMAC manualmente invalida tickets de upload e cursores ainda ativos. A rotação de chaves está descrita no [guia de operação](docs/deployment.md#rotação-de-chaves).
 
 ### 8. Criar o proprietário — somente no primeiro setup
 
@@ -305,21 +307,31 @@ Acesse a URL exibida, entre com o proprietário e envie um vídeo. Ao terminar, 
 
 ## Deploys seguintes
 
-Depois de carregar `.env.deploy` na sessão de shell:
+Com `.env.deploy` preenchido na raiz e dependências instaladas:
 
-1. Execute `npm run check` e `npm run infra:check`.
-2. Gere um novo plano e aplique-o se houver alterações no backend ou na infraestrutura.
-3. Gere a configuração pública, reconstrua e publique o front conforme a etapa 9.
+```sh
+npm run deploy
+```
+
+Executa `deploy:back` (build do backend, Terraform e inicialização dos segredos pendentes) e depois `deploy:front` (configuração pública, build, envio ao S3 e invalidação do CloudFront). Uma falha interrompe a sequência. O Terraform aplica com `-auto-approve`, sem confirmação interativa. Os scripts carregam `.env.deploy` automaticamente; variáveis já exportadas têm prioridade. No primeiro deploy, `ACERVO_SIGNING_PRIVATE_KEY_PATH` é necessário para inicializar os `SecureString`; segredos existentes são preservados e dispensam o arquivo privado nos deploys seguintes.
+
+Para executar só uma etapa, use `npm run deploy:back` ou `npm run deploy:front`. Para revisar o plano antes do apply, siga o fluxo manual acima. Se ainda estiver migrando do Secrets Manager, siga primeiro a [migração documentada](docs/deployment.md#migração-de-um-deploy-com-secrets-manager).
 
 Não repita a criação do proprietário ou a inicialização dos segredos. Preserve os builds publicados para rollback; o [guia de operação](docs/deployment.md) explica como restaurar uma versão preservando os dados.
 
 ## Upload, retenção e VLC
 
+O botão **Assistir** abre `/watch/:fileName` com o player nativo do navegador, controles de reprodução e tela cheia. A rota usa o nome completo do objeto (UUID e nome original) e exige login; links diretos preservam o destino após autenticar. Formatos e codecs dependem do navegador, sem transcodificação. A navegação mantém uploads em andamento.
+
+Os uploads aceitam apenas vídeos, com validação de extensão e MIME compartilhada entre front e backend. MP4, WebM, MOV, MKV e outros formatos estão listados no [contrato da API](docs/api.md).
+
 O limite padrão por arquivo é **20 GiB**, ajustável para baixo por `TF_VAR_max_upload_bytes`. Os uploads usam partes de **16 MiB**, até três partes simultâneas por arquivo e URLs de partes válidas por 15 minutos. A sessão dura até 24 horas; fechar a página perde a retomada local. Partes abandonadas são removidas pelo Lifecycle.
 
 Cada chave tem o formato `<uuid>--<nome-original>` na raiz do bucket. Nomes repetidos permanecem como arquivos diferentes, e a interface exibe o nome original.
 
-Os 30 dias são calculados a partir de `LastModified` do S3; em multipart, o marco de criação corresponde ao início do upload. A aplicação encerra novos acessos ao fim do prazo. A exclusão física pelo Lifecycle é assíncrona, por isso o arquivo pode aparecer como **Expirado / Exclusão pendente** antes de ser removido.
+O prazo inicial de 30 dias usa `LastModified` do S3; em multipart, esse marco corresponde ao início do upload. **Reiniciar prazo** define um novo vencimento para 30 dias a partir de agora, sem copiar o vídeo nem mudar a data original de envio. As renovações são registradas no DynamoDB. A aplicação encerra novos acessos ao fim do prazo, e uma Lambda acionada a cada hora remove os vídeos expirados. O Lifecycle do S3 remove apenas partes de uploads abandonados. Um vídeo expirado ainda presente pode ser renovado enquanto sua exclusão não tiver começado.
+
+**Baixar** gera um link temporário de até 15 minutos e inicia o download direto do S3, mantendo o nome original. O prazo desse link também respeita o vencimento do vídeo.
 
 Um link vence em `min(agora + 4 horas, fim da retenção)`. Quem receber a URL pode acessar o vídeo até esse vencimento. Para assistir:
 
