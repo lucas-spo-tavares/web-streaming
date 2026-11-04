@@ -18,11 +18,15 @@ interface Challenge {
   session: string;
   expires: number;
 }
+
 function message(error: unknown, confirming: boolean) {
   const name = error instanceof Error ? error.name : '';
+
   if (name === 'CodeMismatchException')
     return 'Código incorreto. Confira o email e tente novamente.';
+
   if (name === 'ExpiredCodeException') return 'O código expirou. Solicite um novo código.';
+
   if (
     [
       'TooManyRequestsException',
@@ -31,15 +35,19 @@ function message(error: unknown, confirming: boolean) {
     ].includes(name)
   )
     return 'Muitas tentativas. Aguarde um pouco antes de tentar novamente.';
+
   if (name === 'NotAuthorizedException' || name === 'UserNotFoundException')
     return confirming
       ? 'Código ou sessão inválidos. Solicite um novo código.'
       : 'Não foi possível iniciar o acesso com esse email.';
+
   return confirming
     ? 'Não foi possível confirmar o código. Tente novamente.'
     : 'Não foi possível enviar o código. Tente novamente.';
 }
+
 export class AuthClient {
+  error = '';
   private session: Session | null = null;
   private challenge: Challenge | null = null;
   private listeners = new Set<() => void>();
@@ -51,10 +59,13 @@ export class AuthClient {
     this.storageKey = `acervo.session.${config.region}.${config.clientId}`;
     this.restore();
   }
+
   restore() {
     let restored: Session | null = null;
+
     try {
       const saved = JSON.parse(localStorage.getItem(this.storageKey) ?? 'null');
+
       if (
         saved &&
         typeof saved.accessToken === 'string' &&
@@ -76,23 +87,31 @@ export class AuthClient {
     this.session = restored;
     this.emit();
   }
+
   syncStorage = (event: StorageEvent) => {
     if (event.key === this.storageKey || event.key === null) this.restore();
   };
+
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
+
     return () => {
       this.listeners.delete(listener);
     };
   };
+
   snapshot = () => this.session;
+
   private emit() {
     for (const listener of this.listeners) listener();
   }
-  clear() {
+
+  clear(error = '') {
+    this.error = error;
     this.generation++;
     this.session = null;
     this.challenge = null;
+
     try {
       localStorage.removeItem(this.storageKey);
     } catch {
@@ -100,17 +119,21 @@ export class AuthClient {
     }
     this.emit();
   }
+
   cancelChallenge() {
     this.generation++;
     this.challenge = null;
   }
+
   async start(email: string) {
     const normalized = email.trim().toLowerCase();
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || normalized.length > 254)
       throw new Error('Informe um email válido.');
     const generation = ++this.generation;
     this.challenge = null;
     let result;
+
     try {
       result = await this.client.send(
         new InitiateAuthCommand({
@@ -122,7 +145,9 @@ export class AuthClient {
     } catch (error) {
       throw new Error(message(error, false), { cause: error });
     }
+
     if (generation !== this.generation) throw new Error('Solicitação de login cancelada.');
+
     if (result.ChallengeName !== 'EMAIL_OTP' || !result.Session)
       throw new Error(
         'O acesso por código não está disponível. Confira a configuração do usuário e do Cognito.',
@@ -137,15 +162,19 @@ export class AuthClient {
       expires: Date.now() + 3 * 60 * 1000,
     };
   }
+
   async confirm(code: string) {
     const challenge = this.challenge;
     const generation = this.generation;
+
     if (!challenge || challenge.expires <= Date.now()) {
       this.challenge = null;
       throw new Error('A sessão expirou. Solicite um novo código.');
     }
+
     if (!/^\d{8}$/.test(code)) throw new Error('Informe os 8 dígitos do código.');
     let result;
+
     try {
       result = await this.client.send(
         new RespondToAuthChallengeCommand({
@@ -158,19 +187,23 @@ export class AuthClient {
     } catch (error) {
       throw new Error(message(error, true), { cause: error });
     }
+
     if (generation !== this.generation || this.challenge !== challenge)
       throw new Error('Solicitação de login cancelada.');
     this.accept(result.AuthenticationResult);
     this.challenge = null;
   }
+
   private accept(tokens?: AuthenticationResultType) {
     if (!tokens?.AccessToken || !Number.isFinite(tokens.ExpiresIn) || tokens.ExpiresIn! <= 0)
       throw new Error('Resposta de autenticação inválida.');
+    this.error = '';
     this.session = {
       accessToken: tokens.AccessToken,
       refreshToken: tokens.RefreshToken,
       expires: Date.now() + tokens.ExpiresIn! * 1000,
     };
+
     try {
       localStorage.setItem(
         this.storageKey,
@@ -183,21 +216,27 @@ export class AuthClient {
       /* A valid login still works in memory when storage is unavailable. */
     }
     this.emit();
+
     return tokens.AccessToken;
   }
+
   async token(): Promise<string> {
     const current = this.session;
+
     if (!current) throw new Error('Entre para continuar.');
+
     if (current.expires <= Date.now()) {
-      this.clear();
-      throw new Error('Sua sessão terminou. Entre novamente.');
+      this.clear('Sua sessão terminou. Entre novamente.');
+      throw new Error(this.error);
     }
+
     return current.accessToken;
   }
 
   logout() {
     const refreshToken = this.session?.refreshToken;
     this.clear();
+
     if (refreshToken)
       void this.client
         .send(new RevokeTokenCommand({ ClientId: this.config.clientId, Token: refreshToken }))

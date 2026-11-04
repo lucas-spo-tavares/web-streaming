@@ -48,15 +48,20 @@ O workspace `front/` usa React, TypeScript, Vite, Tailwind CSS e componentes sha
 
 A tela da biblioteca reúne busca, envio de arquivos, tamanho, data, prazo de expiração e ação para copiar o link. A busca continua nas páginas seguintes do S3; ela não fica limitada aos arquivos já carregados na tela.
 
-| Arquivo/diretório          | Responsabilidade                                      |
-| -------------------------- | ----------------------------------------------------- |
-| `front/src/App.tsx`        | Entrada da aplicação e controle da sessão             |
-| `front/src/Library.tsx`    | Biblioteca e ações do usuário                         |
-| `front/src/lib/auth.ts`    | Login Cognito EMAIL_OTP na página, renovação e logout |
-| `front/src/lib/api.ts`     | Comunicação autenticada com a API                     |
-| `front/src/lib/upload.ts`  | Transferência multipart diretamente ao S3             |
-| `front/src/components/ui/` | Componentes shadcn/ui                                 |
-| `front/src/index.css`      | Tema e estilos Tailwind                               |
+| Arquivo/diretório              | Responsabilidade                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `front/src/App.tsx`            | Entrada da aplicação                                                                            |
+| `front/src/routes.tsx`         | Rotas da biblioteca e do player, com acesso condicionado à sessão                               |
+| `front/src/views/`             | Telas Login, Library e Player                                                                   |
+| `front/src/providers/auth.tsx` | Sessão, expiração, logout e limpeza do cache                                                    |
+| `front/src/services/`          | Cliente Axios autenticado e métodos por endpoint: files, uploads, stream-links e download-links |
+| `front/src/server-state/`      | QueryClient, queries e mutations do TanStack Query                                              |
+| `front/src/lib/auth.ts`        | Cliente Cognito EMAIL_OTP                                                                       |
+| `front/src/lib/upload.ts`      | Transferência multipart diretamente ao S3                                                       |
+| `front/src/components/ui/`     | Componentes shadcn/ui                                                                           |
+| `front/src/index.css`          | Tema e estilos Tailwind                                                                         |
+
+As views usam os hooks de `server-state`, que chamam os métodos de `services`. A listagem usa paginação por cursor com `useInfiniteQuery`; renovar e excluir arquivos atualiza a listagem. O envio multipart mantém progresso e retomada no `UploadJob`, executado por uma mutation.
 
 O email e o código são informados na própria página. O front usa `USER_AUTH` com `EMAIL_OTP`, sem redirecionamento para o login hospedado. O access token e seu vencimento ficam no `localStorage`, em uma chave específica da região e do app client Cognito, mantendo a sessão ao recarregar. Quando o token expira ou a API responde 401, a sessão persistida é removida e a tela de login reaparece. Não há renovação automática do token; desafio OTP e refresh token ficam somente em memória.
 

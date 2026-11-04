@@ -7,6 +7,7 @@ export default {
   jsxSingleQuote: false,
   trailingComma: 'all',
   printWidth: 100,
+  objectWrap: 'preserve',
   endOfLine: 'lf',
   proseWrap: 'preserve',
   plugins: ['prettier-plugin-tailwindcss'],

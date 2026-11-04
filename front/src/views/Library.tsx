@@ -1,5 +1,8 @@
+import { useUploadJob } from '@/server-state/uploads';
+import { useCreateStreamLink } from '@/server-state/stream-links';
+import { useDownloadLink } from '@/server-state/download-links';
 import { Link, Outlet, useMatch } from 'react-router';
-import { VIDEO_ACCEPT } from '../../config/video.mjs';
+import { VIDEO_ACCEPT } from '../../../config/video.mjs';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
@@ -33,37 +36,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import type { LibraryApi, StreamLink } from '@/lib/api';
-import { useLibrary } from '@/lib/use-library';
+import type { StreamLink } from '@/services/types';
+import { useLibrary, useRenewFile, useDeleteFile } from '@/server-state/files';
 import { UploadJob, type UploadState } from '@/lib/upload';
 
-export function bytes(size: number) {
-  if (size < 1024) return `${size} B`;
-  const units = ['KiB', 'MiB', 'GiB'];
-  const i = Math.min(Math.floor(Math.log(size) / Math.log(1024)) - 1, 2);
-  return `${(size / 1024 ** (i + 1)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${units[i]}`;
-}
-export function remaining(end: string, now: number) {
-  const diff = Math.max(0, Date.parse(end) - now);
-  if (!diff) return 'Expirado';
-  const days = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days) return `${days}d ${hours}h`;
-  if (hours) return `${hours}h ${Math.floor((diff % 3600000) / 60000)}min`;
-  return `${Math.max(1, Math.ceil(diff / 60000))}min`;
-}
-const date = (iso: string) =>
-  new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-export function Library({ api, logout }: { api: LibraryApi; logout: () => void }) {
+export function Library({ logout }: { logout: () => void }) {
+  const uploadJob = useUploadJob();
+  const renewFile = useRenewFile();
+  const deleteFile = useDeleteFile();
+  const streamLink = useCreateStreamLink();
+  const getDownloadLink = useDownloadLink();
   const isLibrary = useMatch('/') !== null;
   const [query, setQuery] = useState('');
-  const library = useLibrary(api, query);
+  const library = useLibrary(query);
   const [, setClock] = useState(Date.now());
   const now = Date.now() + library.offset;
   const [notice, setNotice] = useState('');
@@ -80,36 +65,44 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
   refresh.current = library.refresh;
   useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 10000);
+
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
     const active = jobRefs.current;
+
     return () => {
       for (const job of active.values()) void job.cancel();
       active.clear();
     };
   }, []);
+
   function select(files: FileList | null) {
     for (const file of Array.from(files ?? [])) {
       const id = crypto.randomUUID();
-      const job = new UploadJob(file, api, (state) => {
+      const job = new UploadJob(file, (state) => {
         setJobs((previous) => ({ ...previous, [id]: state }));
+
         if (state.status === 'complete') {
           jobRefs.current.delete(id);
           refresh.current();
         }
       });
       jobRefs.current.set(id, job);
-      void job.run();
+      uploadJob.mutate(job);
     }
+
     if (input.current) input.current.value = '';
   }
+
   async function copy(key: string, name: string) {
     setCopying(key);
     setNotice('');
+
     try {
-      const result = await api.stream(key);
+      const result = await streamLink.mutateAsync(key);
       setLink({ ...result, name, key });
+
       try {
         if (!navigator.clipboard) throw new Error('Clipboard unavailable');
         await navigator.clipboard.writeText(result.url);
@@ -123,26 +116,31 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
       setCopying(null);
     }
   }
+
   async function renew(key: string, name: string) {
     if (busy) return;
     setRenewing(key);
     setNotice('');
+
     try {
-      const result = await api.renew(key);
-      setNotice(`Prazo de ${name} reiniciado. Nova expiração: ${date(result.file.expiresAt)}.`);
-      library.refresh();
+      const result = await renewFile.mutateAsync(key);
+      setNotice(
+        `Prazo de ${name} reiniciado. Nova expiração: ${new Date(result.file.expiresAt).appDateFormat()}.`,
+      );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao reiniciar o prazo.');
     } finally {
       setRenewing(null);
     }
   }
+
   async function download(key: string, name: string) {
     if (busy) return;
     setDownloading(key);
     setNotice('');
+
     try {
-      const result = await api.download(key);
+      const result = await getDownloadLink(key);
       const anchor = document.createElement('a');
       anchor.href = result.url;
       anchor.download = name;
@@ -156,8 +154,10 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
       setDownloading(null);
     }
   }
+
   async function remove(key: string, name: string) {
     if (busy) return;
+
     if (
       !window.confirm(
         `Excluir “${name}” permanentemente? Esta ação não pode ser desfeita. Links já gerados podem continuar disponíveis até expirar.`,
@@ -166,17 +166,18 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
       return;
     setDeleting(key);
     setNotice('');
+
     try {
-      await api.delete(key);
+      await deleteFile.mutateAsync(key);
       setLink((current) => (current?.key === key ? null : current));
       setNotice(`${name} excluído.`);
-      library.refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao excluir arquivo.');
     } finally {
       setDeleting(null);
     }
   }
+
   return (
     <>
       <div hidden={!isLibrary} className="min-h-screen bg-background text-foreground">
@@ -272,7 +273,7 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{job.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {bytes(job.size)} · {job.message ?? `${job.progress}%`}
+                        {job.size.appBytesFormat()} · {job.message ?? `${job.progress}%`}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -280,7 +281,11 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => void jobRefs.current.get(id)?.run()}
+                          onClick={() => {
+                            const job = jobRefs.current.get(id);
+
+                            if (job) uploadJob.mutate(job);
+                          }}
                         >
                           Tentar novamente
                         </Button>
@@ -307,6 +312,7 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                             setJobs((current) => {
                               const next = { ...current };
                               delete next[id];
+
                               return next;
                             });
                           }}
@@ -373,6 +379,7 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                 <TableBody>
                   {library.files.map((file) => {
                     const expired = now >= Date.parse(file.expiresAt);
+
                     return (
                       <TableRow key={file.key}>
                         <TableCell className="max-w-[135px] pl-5 sm:max-w-xs">
@@ -385,23 +392,23 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                                 {file.name}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground sm:hidden">
-                                {bytes(file.size)}
+                                {file.size.appBytesFormat()}
                               </p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="hidden font-mono text-xs whitespace-nowrap text-muted-foreground sm:table-cell">
-                          {bytes(file.size)}
+                          {file.size.appBytesFormat()}
                         </TableCell>
                         <TableCell className="hidden text-xs whitespace-nowrap text-muted-foreground lg:table-cell">
-                          {date(file.createdAt)}
+                          {new Date(file.createdAt).appDateFormat()}
                         </TableCell>
                         <TableCell>
                           <span
-                            title={date(file.expiresAt)}
+                            title={new Date(file.expiresAt).appDateFormat()}
                             className={`text-xs whitespace-nowrap ${expired ? 'text-muted-foreground' : 'text-primary'}`}
                           >
-                            {remaining(file.expiresAt, now)}
+                            {new Date(file.expiresAt).appRemainingTime({ now })}
                           </span>
                           {expired && (
                             <p className="mt-1 text-[10px] text-muted-foreground">
@@ -557,8 +564,9 @@ export function Library({ api, logout }: { api: LibraryApi; logout: () => void }
                 className="font-mono text-xs"
               />
               <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                Válido até {date(link.expiresAt)}. Quem receber este link pode acessar o vídeo até
-                esse horário. O formato e os codecs precisam ser compatíveis com o VLC.
+                Válido até {new Date(link.expiresAt).appDateFormat()}. Quem receber este link pode
+                acessar o vídeo até esse horário. O formato e os codecs precisam ser compatíveis com
+                o VLC.
               </p>
             </section>
           )}

@@ -1,9 +1,22 @@
 // @vitest-environment happy-dom
+import '../src/extensions';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '../src/server-state/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { Library } from '../src/Library';
-import type { LibraryApi } from '../src/lib/api';
+import { Library } from '../src/views/Library';
+import { list, renew, remove } from '../src/services/files';
+import { download } from '../src/services/download-links';
+
+vi.mock('../src/services/files', () => ({
+  list: vi.fn(),
+  renew: vi.fn(),
+  remove: vi.fn(),
+}));
+vi.mock('../src/services/download-links', () => ({
+  download: vi.fn(),
+}));
 
 const file = {
   key: '12345678-1234-4123-8123-123456789abc--vídeo.mp4',
@@ -15,7 +28,7 @@ const file = {
 };
 const page = { files: [file], nextCursor: null, serverNow: new Date().toISOString() };
 function setup(expired = false) {
-  const api: LibraryApi = {
+  const api = {
     list: vi.fn(async () => ({
       ...page,
       serverNow: new Date().toISOString(),
@@ -39,14 +52,20 @@ function setup(expired = false) {
     delete: vi.fn(),
     stream: vi.fn(),
   };
+  vi.mocked(list).mockImplementation(api.list);
+  vi.mocked(renew).mockImplementation(api.renew);
+  vi.mocked(remove).mockImplementation(api.delete);
+  vi.mocked(download).mockImplementation(api.download);
   render(
-    <MemoryRouter>
-      <Routes>
-        <Route element={<Library api={api} logout={vi.fn()} />}>
-          <Route index element={null} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={createQueryClient()}>
+      <MemoryRouter>
+        <Routes>
+          <Route element={<Library logout={vi.fn()} />}>
+            <Route index element={null} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
   return api;
 }
@@ -74,7 +93,7 @@ describe('file actions', () => {
     const api = setup();
     fireEvent.click(await screen.findByRole('button', { name: 'Baixar vídeo.mp4' }));
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
-    expect(api.download).toHaveBeenCalledWith(file.key);
+    expect(api.download).toHaveBeenCalledWith(file.key, expect.any(AbortSignal));
     expect(screen.getByText('Download de vídeo.mp4 iniciado.')).toBeTruthy();
   });
   it('allows renewing a pending expired video while blocking download', async () => {

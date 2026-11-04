@@ -1,5 +1,9 @@
+import { start, parts as getParts, complete, abort } from '@/services/uploads';
 import { videoContentType } from '../../../config/video.mjs';
-import { ApiError, type LibraryApi, type UploadSession } from './api';
+import { ApiError, type UploadSession } from '@/services/types';
+
+const MAX_UPLOAD_BYTES = 20 * 1024 ** 3;
+
 export type UploadState = {
   name: string;
   size: number;
@@ -7,12 +11,14 @@ export type UploadState = {
   status: 'sending' | 'error' | 'complete' | 'cancelled';
   message?: string;
 };
+
 export type Transfer = (
   url: string,
   blob: Blob,
   signal: AbortSignal,
   progress: (bytes: number) => void,
 ) => Promise<string>;
+
 export const transferPart: Transfer = (url, blob, signal, progress) =>
   new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -24,6 +30,7 @@ export const transferPart: Transfer = (url, blob, signal, progress) =>
     xhr.onload = () => {
       cleanup();
       const etag = xhr.getResponseHeader('ETag');
+
       if (xhr.status >= 200 && xhr.status < 300 && etag) resolve(etag);
       else reject(new Error('Falha ao enviar parte. Verifique a conexão e tente novamente.'));
     };
@@ -36,13 +43,16 @@ export const transferPart: Transfer = (url, blob, signal, progress) =>
       reject(new DOMException('Envio interrompido', 'AbortError'));
     };
     signal.addEventListener('abort', abort, { once: true });
+
     if (signal.aborted) {
       cleanup();
       reject(new DOMException('Envio interrompido', 'AbortError'));
+
       return;
     }
     xhr.send(blob);
   });
+
 export class UploadJob {
   private session?: UploadSession;
   private completed = new Map<number, string>();
@@ -52,7 +62,6 @@ export class UploadJob {
   private cancelled = false;
   constructor(
     readonly file: File,
-    private api: LibraryApi,
     private notify: (state: UploadState) => void,
     private transfer: Transfer = transferPart,
   ) {}
@@ -69,21 +78,31 @@ export class UploadJob {
   }
   async run() {
     if (this.running || this.cancelled) return;
+
     if (!videoContentType(this.file.name, this.file.type)) {
       this.update('error', 'Envie apenas arquivos de vídeo com extensão e tipo compatíveis.');
+
       return;
     }
-    if (this.file.size < 1 || this.file.size > 20 * 1024 ** 3) {
-      this.update('error', 'Selecione um arquivo de até 20 GiB, com tamanho maior que zero.');
+
+    if (this.file.size < 1 || this.file.size > MAX_UPLOAD_BYTES) {
+      this.update(
+        'error',
+        `Selecione um arquivo de até ${MAX_UPLOAD_BYTES.appBytesFormat()}, com tamanho maior que zero.`,
+      );
+
       return;
     }
     this.running = true;
     this.controller = new AbortController();
     this.update('sending');
+
     try {
-      this.session ??= await this.api.start(this.file);
+      this.session ??= await start(this.file);
+
       if (this.cancelled) {
-        await this.api.abort(this.session.ticket);
+        await abort(this.session.ticket);
+
         return;
       }
       const session = this.session;
@@ -92,10 +111,12 @@ export class UploadJob {
       const worker = async () => {
         while (!failure && !this.controller.signal.aborted && index <= session.partCount) {
           const number = index++;
+
           if (this.completed.has(number)) continue;
+
           try {
             // Signing just before each part renews expired URLs on every retry.
-            const { parts } = await this.api.parts(session.ticket, [number]);
+            const { parts } = await getParts(session.ticket, [number]);
             const blob = this.file.slice(
               (number - 1) * session.partSize,
               number * session.partSize,
@@ -118,14 +139,17 @@ export class UploadJob {
         }
       };
       await Promise.all(Array.from({ length: Math.min(3, session.partCount) }, worker));
+
       if (failure) throw failure;
+
       if (this.cancelled) return;
-      await this.api.complete(
+      await complete(
         session.ticket,
         [...this.completed]
           .map(([partNumber, etag]) => ({ partNumber, etag }))
           .sort((a, b) => a.partNumber - b.partNumber),
       );
+
       if (!this.cancelled) this.update('complete', 'Arquivo enviado.');
     } catch (error) {
       if (!this.cancelled) {
@@ -147,9 +171,10 @@ export class UploadJob {
     this.cancelled = true;
     this.controller.abort();
     this.update('cancelled', 'Envio cancelado.');
+
     if (this.session) {
       try {
-        await this.api.abort(this.session.ticket);
+        await abort(this.session.ticket);
       } catch {
         this.update(
           'cancelled',

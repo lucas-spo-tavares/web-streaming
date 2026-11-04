@@ -1,39 +1,19 @@
+import { useStreamLink } from '@/server-state/stream-links';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Film, Loader2, RefreshCw } from 'lucide-react';
-import { Button } from './components/ui/button';
-import type { LibraryApi, StreamLink } from './lib/api';
+import { Button } from '@/components/ui/button';
 
-export function Player({ api }: { api: LibraryApi }) {
+export function Player() {
   const { fileName = '' } = useParams();
   // S3 stores the original filename after a unique UUID prefix, avoiding duplicate-name ambiguity.
   const name = fileName.replace(/^[0-9a-f-]{36}--/, '');
-  const [link, setLink] = useState<StreamLink | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError('');
-    setLink(null);
-    void api.stream(fileName, controller.signal).then(
-      (result) => {
-        if (!controller.signal.aborted) {
-          setLink(result);
-          setLoading(false);
-        }
-      },
-      (cause) => {
-        if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : 'Não foi possível abrir o vídeo.');
-          setLoading(false);
-        }
-      },
-    );
-    return () => controller.abort();
-  }, [api, fileName, revision]);
+  const stream = useStreamLink(fileName);
+  const link = stream.data;
+  const [playbackError, setError] = useState('');
+  const error = playbackError || stream.error?.message || '';
+  const loading = stream.isFetching;
+  useEffect(() => setError(''), [fileName]);
 
   return (
     <main className="min-h-screen bg-background px-5 py-8 text-foreground sm:px-8 sm:py-12">
@@ -58,7 +38,7 @@ export function Player({ api }: { api: LibraryApi }) {
             Abrindo vídeo…
           </div>
         )}
-        {link && !error && (
+        {link && !error && !loading && (
           <video
             key={link.url}
             src={link.url}
@@ -79,7 +59,13 @@ export function Player({ api }: { api: LibraryApi }) {
         {error && (
           <div role="alert" className="rounded-xl border bg-card p-6">
             <p className="mb-4 text-sm text-destructive">{error}</p>
-            <Button variant="outline" onClick={() => setRevision((value) => value + 1)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError('');
+                void stream.refetch();
+              }}
+            >
               <RefreshCw />
               Tentar novamente
             </Button>
