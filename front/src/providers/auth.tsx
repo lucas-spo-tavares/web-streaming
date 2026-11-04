@@ -24,16 +24,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return;
     }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
     const checkExpiry = () => {
       if (session.expires > Date.now()) return;
-      void auth.token().catch(() => {});
+      void auth.token().catch(() => {
+        if (!cancelled) timer = setTimeout(checkExpiry, 30000);
+      });
     };
-    const timer = setTimeout(checkExpiry, Math.max(0, session.expires - Date.now()));
+    timer = setTimeout(checkExpiry, Math.max(0, session.expires - Date.now()));
 
     window.addEventListener('focus', checkExpiry);
     document.addEventListener('visibilitychange', checkExpiry);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       window.removeEventListener('focus', checkExpiry);
       document.removeEventListener('visibilitychange', checkExpiry);

@@ -7,9 +7,11 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import type { AppConfig } from '@/config';
 
+const SESSION_EXPIRED = 'Sua sessão terminou. Entre novamente.';
+
 interface Session {
   accessToken: string;
-  refreshToken?: string;
+  refreshToken: string;
   expires: number;
 }
 interface Challenge {
@@ -54,6 +56,7 @@ export class AuthClient {
   private readonly storageKey: string;
   private client: CognitoIdentityProviderClient;
   private generation = 0;
+  private refreshing: Promise<string> | null = null;
   constructor(private config: AppConfig) {
     this.client = new CognitoIdentityProviderClient({ region: config.region || 'sa-east-1' });
     this.storageKey = `acervo.session.${config.region}.${config.clientId}`;
@@ -61,6 +64,8 @@ export class AuthClient {
   }
 
   restore() {
+    this.generation++;
+    this.refreshing = null;
     let restored: Session | null = null;
 
     try {
@@ -71,9 +76,14 @@ export class AuthClient {
         typeof saved.accessToken === 'string' &&
         saved.accessToken.trim().length > 0 &&
         Number.isFinite(saved.expires) &&
-        saved.expires > Date.now()
+        typeof saved.refreshToken === 'string' &&
+        saved.refreshToken.trim().length > 0
       ) {
-        restored = { accessToken: saved.accessToken, expires: saved.expires };
+        restored = {
+          accessToken: saved.accessToken,
+          refreshToken: saved.refreshToken,
+          expires: saved.expires,
+        };
       } else {
         localStorage.removeItem(this.storageKey);
       }
@@ -110,6 +120,7 @@ export class AuthClient {
     this.error = error;
     this.generation++;
     this.session = null;
+    this.refreshing = null;
     this.challenge = null;
 
     try {
@@ -194,24 +205,21 @@ export class AuthClient {
     this.challenge = null;
   }
 
-  private accept(tokens?: AuthenticationResultType) {
+  private accept(tokens?: AuthenticationResultType, previous?: Session) {
     if (!tokens?.AccessToken || !Number.isFinite(tokens.ExpiresIn) || tokens.ExpiresIn! <= 0)
       throw new Error('Resposta de autenticação inválida.');
+    const refreshToken = tokens.RefreshToken ?? previous?.refreshToken;
+
+    if (!refreshToken) throw new Error('Resposta de autenticação inválida.');
     this.error = '';
     this.session = {
       accessToken: tokens.AccessToken,
-      refreshToken: tokens.RefreshToken,
+      refreshToken,
       expires: Date.now() + tokens.ExpiresIn! * 1000,
     };
 
     try {
-      localStorage.setItem(
-        this.storageKey,
-        JSON.stringify({
-          accessToken: this.session.accessToken,
-          expires: this.session.expires,
-        }),
-      );
+      localStorage.setItem(this.storageKey, JSON.stringify(this.session));
     } catch {
       /* A valid login still works in memory when storage is unavailable. */
     }
@@ -220,17 +228,68 @@ export class AuthClient {
     return tokens.AccessToken;
   }
 
+  async initialize(): Promise<void> {
+    if (this.session) await this.refresh();
+  }
+
   async token(): Promise<string> {
     const current = this.session;
 
     if (!current) throw new Error('Entre para continuar.');
 
-    if (current.expires <= Date.now()) {
-      this.clear('Sua sessão terminou. Entre novamente.');
-      throw new Error(this.error);
-    }
+    if (this.refreshing) return this.refreshing;
+
+    if (current.expires <= Date.now()) return this.refresh();
 
     return current.accessToken;
+  }
+
+  refresh(): Promise<string> {
+    if (this.refreshing) return this.refreshing;
+    const current = this.session;
+
+    if (!current) {
+      this.clear(SESSION_EXPIRED);
+
+      return Promise.reject(new Error(SESSION_EXPIRED));
+    }
+    const generation = this.generation;
+    const pending = this.refreshSession(current, generation).finally(() => {
+      if (this.refreshing === pending) this.refreshing = null;
+    });
+    this.refreshing = pending;
+
+    return pending;
+  }
+
+  private async refreshSession(current: Session, generation: number): Promise<string> {
+    try {
+      const result = await this.client.send(
+        new InitiateAuthCommand({
+          ClientId: this.config.clientId,
+          AuthFlow: 'REFRESH_TOKEN_AUTH',
+          AuthParameters: { REFRESH_TOKEN: current.refreshToken },
+        }),
+      );
+
+      if (generation !== this.generation || this.session !== current)
+        throw new Error('Renovação de sessão cancelada.');
+
+      return this.accept(result.AuthenticationResult, current);
+    } catch (error) {
+      if (generation !== this.generation || this.session !== current) throw error;
+      const name = error instanceof Error ? error.name : '';
+
+      if (
+        ['NotAuthorizedException', 'UserNotFoundException', 'InvalidParameterException'].includes(
+          name,
+        )
+      ) {
+        this.clear(SESSION_EXPIRED);
+        throw new Error(SESSION_EXPIRED, { cause: error });
+      }
+      throw new Error('Não foi possível renovar sua sessão. Tente novamente.', { cause: error });
+    }
   }
 
   logout() {

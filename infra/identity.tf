@@ -51,8 +51,9 @@ resource "aws_cognito_user_pool_client" "web" {
   access_token_validity                = 15
   id_token_validity                    = 15
   auth_session_validity                = 3
-  refresh_token_validity               = 1
-  explicit_auth_flows                  = ["ALLOW_USER_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
+  # One-day sessions with short-lived access tokens renewed by the frontend.
+  refresh_token_validity = 1
+  explicit_auth_flows    = ["ALLOW_USER_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"]
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
