@@ -149,3 +149,12 @@ A configuração inicial tem uma chave; a rotação requer uma atualização Ter
 Custos incluem armazenamento e partes incompletas S3, solicitações S3/CloudFront, tráfego de saída de vídeos, Cognito Essentials, invocações Lambda/API Gateway, leituras e escritas DynamoDB, agendamento EventBridge e CloudWatch. O Parameter Store Standard com throughput padrão não cobra armazenamento nem chamadas; operações de criptografia do KMS podem gerar cobrança. Não habilitar Advanced ou maior throughput sem revisar os custos. Não há valores fixos estimados; dependem de região, volume e uso. Busca sem índice percorre páginas e pode aumentar solicitações. Logs têm retenção de 14 dias, registram operação/status/correlation id e não registram URLs assinadas, tokens, tickets ou query strings de mídia.
 
 Preservar `front/dist`, `back/dist/handler.cjs` e lockfiles da versão publicada em armazenamento de releases. Para rollback de front, publicar build anterior e invalidar index; para backend, restaurar bundle anterior e aplicar plano que só atualize funções. Não usar `terraform destroy` como rollback. Buckets têm `prevent_destroy`/`force_destroy=false`; pool Cognito tem proteção de exclusão. Vídeos removidos pela limpeza ou pelo botão Excluir não são recuperáveis nesta versão sem versionamento. Não restaurar a expiração fixa do Lifecycle durante um rollback enquanto houver vídeos com prazo renovado.
+
+### Encurtador e tags
+
+A API key do encurtador fica no SecureString `/<name>/short-link-api-key`, junto aos outros
+segredos. No primeiro setup, forneça `ACERVO_SHORT_LINK_API_KEY` ao ambiente de
+`scripts/init-secrets.mjs`. Valores já inicializados são preservados. O output
+`short_link_parameter_arn` contém apenas a referência. Somente a função `short` tem permissão
+para ler essa chave. Os dois providers aplicam a tag `web-streaming=true` aos recursos que
+aceitam tags; a tag `Project` foi removida.

@@ -7,6 +7,7 @@ export const OPERATIONS = [
   'complete',
   'abort',
   'stream',
+  'short',
   'delete',
   'renew',
   'download',
@@ -93,7 +94,7 @@ export function validateBackend(env, operation = env.OPERATION) {
     OPERATION: {
       check: (value) => OPERATIONS.includes(value),
       message:
-        'Escolha list, start, parts, complete, abort, stream, delete, renew, download ou cleanup.',
+        'Escolha list, start, parts, complete, abort, stream, short, delete, renew, download ou cleanup.',
     },
     RETENTION_TABLE: {
       check: (value) => /^[a-zA-Z0-9_.-]{3,255}$/.test(value),
@@ -105,7 +106,7 @@ export function validateBackend(env, operation = env.OPERATION) {
       message: 'Informe a região AWS; na Lambda esse valor vem do runtime.',
     },
   };
-  if (operation === 'stream') {
+  if (['stream', 'short'].includes(operation)) {
     rules.MEDIA_DOMAIN = {
       check: isHostname,
       message: 'Informe o hostname CloudFront sem esquema nem caminho.',
@@ -122,6 +123,12 @@ export function validateBackend(env, operation = env.OPERATION) {
     rules.TICKET_PARAMETER_ARN = {
       check: isParameterArn,
       message: 'Informe o ARN do segredo HMAC de tickets.',
+    };
+  }
+  if (operation === 'short') {
+    rules.SHORT_LINK_PARAMETER_ARN = {
+      check: isParameterArn,
+      message: 'Informe o ARN da API key do encurtador.',
     };
   }
   const issues = validateFields({ ...env, OPERATION: operation }, rules);

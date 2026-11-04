@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { stream } from '@/services/stream-links';
+import { stream, shortLink } from '@/services/stream-links';
 
 export function useStreamLink(key: string) {
   return useQuery({
@@ -14,3 +14,6 @@ export const useCreateStreamLink = () =>
   useMutation({
     mutationFn: (key: string) => stream(key),
   });
+
+export const useCreateShortLink = () =>
+  useMutation({ mutationFn: (key: string) => shortLink(key) });

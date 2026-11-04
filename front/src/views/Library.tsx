@@ -1,5 +1,5 @@
 import { useUploadJob } from '@/server-state/uploads';
-import { useCreateStreamLink } from '@/server-state/stream-links';
+import { useCreateStreamLink, useCreateShortLink } from '@/server-state/stream-links';
 import { useDownloadLink } from '@/server-state/download-links';
 import { Link, Outlet, useMatch } from 'react-router';
 import { VIDEO_ACCEPT } from '../../../config/video.mjs';
@@ -11,6 +11,7 @@ import {
   FileVideo2,
   Film,
   Loader2,
+  Link2,
   LogOut,
   Plus,
   Play,
@@ -45,6 +46,7 @@ export function Library({ logout }: { logout: () => void }) {
   const renewFile = useRenewFile();
   const deleteFile = useDeleteFile();
   const streamLink = useCreateStreamLink();
+  const shortLink = useCreateShortLink();
   const getDownloadLink = useDownloadLink();
   const isLibrary = useMatch('/') !== null;
   const [query, setQuery] = useState('');
@@ -57,7 +59,13 @@ export function Library({ logout }: { logout: () => void }) {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [copying, setCopying] = useState<string | null>(null);
-  const busy = copying !== null || deleting !== null || renewing !== null || downloading !== null;
+  const [shortening, setShortening] = useState<string | null>(null);
+  const busy =
+    shortening !== null ||
+    copying !== null ||
+    deleting !== null ||
+    renewing !== null ||
+    downloading !== null;
   const [jobs, setJobs] = useState<Record<string, UploadState>>({});
   const jobRefs = useRef(new Map<string, UploadJob>());
   const input = useRef<HTMLInputElement>(null);
@@ -95,12 +103,14 @@ export function Library({ logout }: { logout: () => void }) {
     if (input.current) input.current.value = '';
   }
 
-  async function copy(key: string, name: string) {
-    setCopying(key);
+  async function copy(key: string, name: string, short = false) {
+    if (busy) return;
+    if (short) setShortening(key);
+    else setCopying(key);
     setNotice('');
 
     try {
-      const result = await streamLink.mutateAsync(key);
+      const result = await (short ? shortLink : streamLink).mutateAsync(key);
       setLink({ ...result, name, key });
 
       try {
@@ -114,6 +124,7 @@ export function Library({ logout }: { logout: () => void }) {
       setNotice(error instanceof Error ? error.message : 'Falha ao gerar link.');
     } finally {
       setCopying(null);
+      setShortening(null);
     }
   }
 
@@ -442,6 +453,20 @@ export function Library({ logout }: { logout: () => void }) {
                                 <Copy />
                               )}
                               <span className="hidden sm:inline">Copiar link</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={expired || busy}
+                              aria-label={`Copiar link curto de ${file.name}`}
+                              onClick={() => void copy(file.key, file.name, true)}
+                            >
+                              {shortening === file.key ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <Link2 />
+                              )}
+                              <span className="hidden sm:inline">Copiar link curto</span>
                             </Button>
                             <Button
                               variant="outline"

@@ -31,3 +31,11 @@ O front oferece `/watch/:fileName`, em que `fileName` é o nome completo do obje
 Reiniciar a expiração define o prazo como 30 dias a partir do relógio do servidor, preservando o nome, o conteúdo, a chave e a data original de envio. Um objeto expirado ainda presente pode ser renovado até a limpeza iniciar sua exclusão; depois disso a API retorna 409 `DELETION_STARTED` ou 404. As renovações ficam na tabela DynamoDB; listagem, streaming e download usam o mesmo vencimento. Escritas condicionais impedem que uma limpeza baseada em uma listagem anterior apague um vídeo renovado.
 
 O download gera uma URL pré-assinada S3 de até 15 minutos, limitada também ao vencimento do vídeo, com `Content-Disposition: attachment` e nome original codificado em UTF-8. Os bytes vão diretamente do S3 ao navegador. Não são geradas URLs novas para arquivos expirados ou ausentes; uma transferência já iniciada pode continuar. A renovação não altera o vencimento de links temporários já emitidos.
+
+### POST /short-links
+
+Recebe `{ "key": "<chave do vídeo>" }`, com a mesma autenticação de proprietário.
+Gera um link assinado de streaming e envia sua URL a `POST https://link.lucas-tavares.com/links`,
+com a API key lida do Parameter Store somente no backend. Retorna `{ url, expiresAt, serverNow }`,
+com `url` encurtada e a mesma validade do link assinado. Chamado apenas pelo botão **Copiar link curto**;
+listar, assistir e copiar o link original não chamam o encurtador. Falhas retornam 503 sem expor credenciais.

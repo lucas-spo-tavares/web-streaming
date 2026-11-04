@@ -8,6 +8,9 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { Library } from '../src/views/Library';
 import { list, renew, remove } from '../src/services/files';
 import { download } from '../src/services/download-links';
+import { stream, shortLink } from '../src/services/stream-links';
+
+vi.mock('../src/services/stream-links', () => ({ stream: vi.fn(), shortLink: vi.fn() }));
 
 vi.mock('../src/services/files', () => ({
   list: vi.fn(),
@@ -50,8 +53,19 @@ function setup(expired = false) {
     complete: vi.fn(),
     abort: vi.fn(),
     delete: vi.fn(),
-    stream: vi.fn(),
+    stream: vi.fn(async () => ({
+      url: 'https://media.test/signed',
+      expiresAt: file.expiresAt,
+      serverNow: page.serverNow,
+    })),
+    short: vi.fn(async () => ({
+      url: 'https://link.lucas-tavares.com/abcdef',
+      expiresAt: file.expiresAt,
+      serverNow: page.serverNow,
+    })),
   };
+  vi.mocked(stream).mockImplementation(api.stream);
+  vi.mocked(shortLink).mockImplementation(api.short);
   vi.mocked(list).mockImplementation(api.list);
   vi.mocked(renew).mockImplementation(api.renew);
   vi.mocked(remove).mockImplementation(api.delete);
@@ -74,6 +88,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe('file actions', () => {
+  it('calls the shortener only when copying a short link and copies its result', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const api = setup();
+    const shortButton = await screen.findByRole('button', {
+      name: 'Copiar link curto de vídeo.mp4',
+    });
+    expect(api.short).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Copiar link de vídeo.mp4' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://media.test/signed'));
+    expect(api.short).not.toHaveBeenCalled();
+    await waitFor(() => expect((shortButton as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(shortButton);
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('https://link.lucas-tavares.com/abcdef'),
+    );
+    expect(api.short).toHaveBeenCalledExactlyOnceWith(file.key);
+    expect(api.stream).toHaveBeenCalledOnce();
+  });
+  it('shows a shortener failure and re-enables the short link button', async () => {
+    const api = setup();
+    api.short.mockRejectedValueOnce(new Error('Encurtador indisponível.'));
+    const button = await screen.findByRole('button', { name: 'Copiar link curto de vídeo.mp4' });
+    fireEvent.click(button);
+    expect(await screen.findByText('Encurtador indisponível.')).toBeTruthy();
+    expect((button as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('renews the selected video and refreshes its expiry', async () => {
     const api = setup();
     fireEvent.click(

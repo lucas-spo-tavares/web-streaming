@@ -42,20 +42,20 @@ O login usa `USER_AUTH` com `EMAIL_OTP` na própria página, sem senha ou redire
 
 `back/.env.local` serve para validação, sem iniciar API local. Na AWS, o Terraform injeta as variáveis e o runtime fornece `AWS_REGION`. ARNs são referências e não contêm o valor de segredos.
 
-| Variável                | Obrigatória em     | Padrão/origem                                                                                                     | Sensibilidade         |
-| ----------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- | --------------------- |
-| `OPERATION`             | Todas              | `list`, `start`, `parts`, `complete`, `abort`, `stream`, `delete`, `renew`, `download`, `cleanup`, pelo Terraform | Configuração          |
-| `MEDIA_BUCKET`          | Todas              | Bucket criado pelo Terraform                                                                                      | Configuração          |
-| `RETENTION_TABLE`       | Todas              | Tabela `${TF_VAR_name}-retention` criada pelo Terraform                                                           | Configuração          |
-| `AWS_REGION`            | Todas              | Runtime Lambda ou região exportada fora dele                                                                      | Configuração          |
-| `TICKET_PARAMETER_ARN`  | Listagem e uploads | Output `ticket_parameter_arn`                                                                                     | Referência ao segredo |
-| `MEDIA_DOMAIN`          | Streaming          | Output `media_domain`, hostname sem esquema/path                                                                  | Público               |
-| `SIGNING_PARAMETER_ARN` | Streaming          | Output `signing_parameter_arn`                                                                                    | Referência ao segredo |
-| `CLOUDFRONT_KEY_ID`     | Streaming          | ID da chave pública no recurso Terraform CloudFront                                                               | Público               |
-| `APP_ENV`               | Opcional           | `production`; alternativa `acceptance`                                                                            | Configuração          |
-| `MAX_UPLOAD_BYTES`      | Opcional           | `21474836480` (20 GiB), inteiro entre 1 e esse limite                                                             | Configuração          |
+| Variável                | Obrigatória em     | Padrão/origem                                                                                                              | Sensibilidade         |
+| ----------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `OPERATION`             | Todas              | `list`, `start`, `parts`, `complete`, `abort`, `stream`, `short`, `delete`, `renew`, `download`, `cleanup`, pelo Terraform | Configuração          |
+| `MEDIA_BUCKET`          | Todas              | Bucket criado pelo Terraform                                                                                               | Configuração          |
+| `RETENTION_TABLE`       | Todas              | Tabela `${TF_VAR_name}-retention` criada pelo Terraform                                                                    | Configuração          |
+| `AWS_REGION`            | Todas              | Runtime Lambda ou região exportada fora dele                                                                               | Configuração          |
+| `TICKET_PARAMETER_ARN`  | Listagem e uploads | Output `ticket_parameter_arn`                                                                                              | Referência ao segredo |
+| `MEDIA_DOMAIN`          | Streaming          | Output `media_domain`, hostname sem esquema/path                                                                           | Público               |
+| `SIGNING_PARAMETER_ARN` | Streaming          | Output `signing_parameter_arn`                                                                                             | Referência ao segredo |
+| `CLOUDFRONT_KEY_ID`     | Streaming          | ID da chave pública no recurso Terraform CloudFront                                                                        | Público               |
+| `APP_ENV`               | Opcional           | `production`; alternativa `acceptance`                                                                                     | Configuração          |
+| `MAX_UPLOAD_BYTES`      | Opcional           | `21474836480` (20 GiB), inteiro entre 1 e esse limite                                                                      | Configuração          |
 
-Chave privada e segredo HMAC são lidos diretamente do Parameter Store, nunca de `VITE_*`. A listagem não exige campos de streaming. As operações `delete`, `renew`, `download` e `cleanup` não exigem referências a segredos.
+Chave privada, segredo HMAC e API key do encurtador são lidos diretamente do Parameter Store, nunca de `VITE_*`. A listagem não exige campos de streaming. As operações `delete`, `renew`, `download` e `cleanup` não exigem referências a segredos.
 
 ```sh
 npm run env:check -- --target backend --file back/.env.local
@@ -129,3 +129,8 @@ node scripts/with-env.mjs .env.deploy node -e 'if (!process.env.TF_VAR_name) pro
 ```
 
 A configuração de ambiente não altera as regras de retenção de 30 dias nem os links de até quatro horas.
+
+A operação `short` exige os mesmos campos de assinatura que `stream` e também
+`SHORT_LINK_PARAMETER_ARN` (output `short_link_parameter_arn`). Apenas essa operação lê a API key.
+No primeiro setup, forneça `ACERVO_SHORT_LINK_API_KEY` ao ambiente de `scripts/init-secrets.mjs`;
+os próximos deploys preservam o valor já inicializado no Parameter Store.

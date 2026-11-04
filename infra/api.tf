@@ -8,6 +8,7 @@ locals {
     delete   = { route = "DELETE /files", actions = ["s3:DeleteObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
     renew    = { route = "POST /files/renew", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
     download = { route = "POST /download-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    short    = { route = "POST /short-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
     stream   = { route = "POST /stream-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
   }
   functions = merge(local.operations, {
@@ -17,6 +18,7 @@ locals {
     list     = ["dynamodb:BatchGetItem"]
     complete = ["dynamodb:GetItem"]
     stream   = ["dynamodb:GetItem"]
+    short    = ["dynamodb:GetItem"]
     download = ["dynamodb:GetItem"]
     renew    = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
     delete   = ["dynamodb:UpdateItem"]
@@ -34,6 +36,14 @@ resource "aws_ssm_parameter" "ticket" {
 }
 resource "aws_ssm_parameter" "signing" {
   name             = "/${var.name}/cloudfront-private-key"
+  type             = "SecureString"
+  tier             = "Standard"
+  key_id           = "alias/aws/ssm"
+  value_wo         = "PENDING_SECRET_INITIALIZATION"
+  value_wo_version = 1
+}
+resource "aws_ssm_parameter" "short_link" {
+  name             = "/${var.name}/short-link-api-key"
   type             = "SecureString"
   tier             = "Standard"
   key_id           = "alias/aws/ssm"
@@ -58,8 +68,10 @@ resource "aws_iam_role_policy" "lambda" {
   policy = jsonencode({ Version = "2012-10-17", Statement = concat([
     { Effect = "Allow", Action = each.value.actions, Resource = each.value.resources },
     { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.lambda[each.key].arn}:*" }
-    ], contains(["list", "start", "parts", "complete", "abort", "stream"], each.key) ? [
-    { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = each.key == "stream" ? aws_ssm_parameter.signing.arn : aws_ssm_parameter.ticket.arn }
+    ], contains(["list", "start", "parts", "complete", "abort", "stream", "short"], each.key) ? [
+    { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = contains(["stream", "short"], each.key) ? [aws_ssm_parameter.signing.arn] : [aws_ssm_parameter.ticket.arn] }
+    ] : [], each.key == "short" ? [
+    { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = aws_ssm_parameter.short_link.arn }
     ] : [], length(lookup(local.retention_actions, each.key, [])) > 0 ? [
     { Effect = "Allow", Action = local.retention_actions[each.key], Resource = aws_dynamodb_table.retention.arn }
   ] : []) })
@@ -82,15 +94,16 @@ resource "aws_lambda_function" "api" {
   timeout          = each.key == "cleanup" ? 900 : 30
   environment {
     variables = {
-      RETENTION_TABLE       = aws_dynamodb_table.retention.name
-      MEDIA_BUCKET          = aws_s3_bucket.app["media"].id
-      MEDIA_DOMAIN          = aws_cloudfront_distribution.media.domain_name
-      OPERATION             = each.key
-      APP_ENV               = var.environment
-      MAX_UPLOAD_BYTES      = tostring(var.max_upload_bytes)
-      TICKET_PARAMETER_ARN  = aws_ssm_parameter.ticket.arn
-      SIGNING_PARAMETER_ARN = aws_ssm_parameter.signing.arn
-      CLOUDFRONT_KEY_ID     = aws_cloudfront_public_key.media.id
+      RETENTION_TABLE          = aws_dynamodb_table.retention.name
+      MEDIA_BUCKET             = aws_s3_bucket.app["media"].id
+      MEDIA_DOMAIN             = aws_cloudfront_distribution.media.domain_name
+      OPERATION                = each.key
+      APP_ENV                  = var.environment
+      MAX_UPLOAD_BYTES         = tostring(var.max_upload_bytes)
+      TICKET_PARAMETER_ARN     = aws_ssm_parameter.ticket.arn
+      SIGNING_PARAMETER_ARN    = aws_ssm_parameter.signing.arn
+      SHORT_LINK_PARAMETER_ARN = aws_ssm_parameter.short_link.arn
+      CLOUDFRONT_KEY_ID        = aws_cloudfront_public_key.media.id
     }
   }
   depends_on = [aws_iam_role_policy.lambda, aws_cloudwatch_log_group.lambda, aws_s3_bucket_lifecycle_configuration.media]

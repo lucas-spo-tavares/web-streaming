@@ -14,3 +14,5 @@ output "frontend_config" {
     VITE_CLIENT_ID  = aws_cognito_user_pool_client.web.id
   }
 }
+
+output "short_link_parameter_arn" { value = aws_ssm_parameter.short_link.arn }
