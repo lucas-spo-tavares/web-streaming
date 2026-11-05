@@ -5,7 +5,9 @@ import { createQueryClient } from '../src/server-state/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { Library } from '../src/views/Library';
+import { Library } from '../src/views/Library/Library';
+import { Player } from '../src/views/Player/Player';
+import { AppTemplate } from '../src/templates/AppTemplate';
 import { list, renew, remove } from '../src/services/files';
 import { download } from '../src/services/download-links';
 import { stream, shortLink } from '../src/services/stream-links';
@@ -31,6 +33,7 @@ const file = {
 };
 const page = { files: [file], nextCursor: null, serverNow: new Date().toISOString() };
 function setup(expired = false) {
+  const logout = vi.fn();
   const api = {
     list: vi.fn(async () => ({
       ...page,
@@ -74,20 +77,38 @@ function setup(expired = false) {
     <QueryClientProvider client={createQueryClient()}>
       <MemoryRouter>
         <Routes>
-          <Route element={<Library logout={vi.fn()} />}>
-            <Route index element={null} />
+          <Route element={<AppTemplate logout={logout} />}>
+            <Route element={<Library />}>
+              <Route index element={null} />
+              <Route path="watch/:fileName" element={<Player />} />
+            </Route>
           </Route>
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return api;
+  return { ...api, logout };
 }
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
 describe('file actions', () => {
+  it('keeps the shared header when watching a video and returning to the library', async () => {
+    const api = setup();
+    const header = screen.getByRole('banner');
+    fireEvent.click(await screen.findByRole('link', { name: 'Assistir vídeo.mp4' }));
+    expect(await screen.findByLabelText('Reproduzir vídeo.mp4')).toBeTruthy();
+    expect(screen.getByRole('banner')).toBe(header);
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Enviar vídeos' })).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'Acervo, início' }));
+    expect(await screen.findByRole('button', { name: 'Enviar vídeos' })).toBeTruthy();
+    expect(screen.getByRole('banner')).toBe(header);
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(api.logout).toHaveBeenCalledOnce();
+  });
+
   it('calls the shortener only when copying a short link and copies its result', async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
