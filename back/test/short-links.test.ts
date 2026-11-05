@@ -150,7 +150,7 @@ describe('short links', () => {
       expect.objectContaining({
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': 'test-key' },
-        body: JSON.stringify({ url: 'https://media.test/signed', expiresAt, maxAccesses: 5 }),
+        body: JSON.stringify({ url: 'https://media.test/signed', expiresAt }),
       }),
     );
   });
@@ -166,7 +166,6 @@ describe('short links', () => {
     expect(JSON.parse(request.mock.calls[0][1]!.body as string)).toEqual({
       url: 'https://media.test/signed',
       ...options,
-      maxAccesses: 5,
     });
     await expect(
       shortenLink(

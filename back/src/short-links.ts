@@ -12,7 +12,7 @@ export async function shortenLink(
     const response = await request(`${origin}/links`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey },
-      body: JSON.stringify({ url, ...options, maxAccesses: 5 }),
+      body: JSON.stringify({ url, ...options }),
       signal: AbortSignal.timeout(10000),
       redirect: 'error',
     });

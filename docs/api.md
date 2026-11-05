@@ -39,8 +39,9 @@ O campo `code` é opcional: sem ele, gera um código aleatório; com ele, cria o
 do endereço fixo. Aceita de 1 a 64 caracteres `[a-z0-9_-]`, começando por letra ou número.
 Gera um link assinado de streaming e envia sua URL a `POST https://link.lucas-tavares.com/links`,
 com `expiresAt` igual ao vencimento do link assinado (até 4 horas, limitado pela retenção do vídeo)
-e `code` quando informado. Os dois tipos enviam `maxAccesses: 5`, limitando o endereço curto a
-5 acessos. Substituir um código fixo reinicia esse contador. A API key é lida do Parameter Store somente no backend.
+e `code` quando informado. Os dois tipos omitem `maxAccesses`, permitindo acessos ilimitados
+até a expiração. Substituir um código fixo também remove qualquer limite de acessos anterior.
+A API key é lida do Parameter Store somente no backend.
 Retorna `{ url, expiresAt, serverNow }`, com `url` encurtada e a mesma validade do link assinado.
 Os botões **Gerar link aleatório** e **Gerar link fixo** geram e copiam o endereço.
 O segundo abre um modal com `stream` preenchido e permite escolher outro código.

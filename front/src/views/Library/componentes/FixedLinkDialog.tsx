@@ -44,7 +44,7 @@ export function FixedLinkDialog({ name, busy, error, onClose, onGenerate }: Fixe
         </h2>
         <p id="fixed-link-description" className="mt-2 text-sm text-muted-foreground">
           Escolha o endereço de {name}. Se ele já for seu, o destino será substituído por este
-          vídeo. O link vale por até 4 horas, com no máximo 5 acessos.
+          vídeo. O link vale por até 4 horas.
         </p>
         <Label htmlFor="fixed-link-code" className="mt-5 mb-2 block">
           Código do link fixo
