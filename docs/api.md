@@ -34,8 +34,15 @@ O download gera uma URL pré-assinada S3 de até 15 minutos, limitada também ao
 
 ### POST /short-links
 
-Recebe `{ "key": "<chave do vídeo>" }`, com a mesma autenticação de proprietário.
+Recebe `{ "key": "<chave do vídeo>", "code": "stream" }`, com a mesma autenticação de proprietário.
+O campo `code` é opcional: sem ele, gera um código aleatório; com ele, cria ou substitui o destino
+do endereço fixo. Aceita de 1 a 64 caracteres `[a-z0-9_-]`, começando por letra ou número.
 Gera um link assinado de streaming e envia sua URL a `POST https://link.lucas-tavares.com/links`,
-com a API key lida do Parameter Store somente no backend. Retorna `{ url, expiresAt, serverNow }`,
-com `url` encurtada e a mesma validade do link assinado. Chamado apenas pelo botão **Copiar link curto**;
-listar, assistir e copiar o link original não chamam o encurtador. Falhas retornam 503 sem expor credenciais.
+com `expiresAt` igual ao vencimento do link assinado (até 4 horas, limitado pela retenção do vídeo)
+e `code` quando informado. Os dois tipos enviam `maxAccesses: 5`, limitando o endereço curto a
+5 acessos. Substituir um código fixo reinicia esse contador. A API key é lida do Parameter Store somente no backend.
+Retorna `{ url, expiresAt, serverNow }`, com `url` encurtada e a mesma validade do link assinado.
+Os botões **Gerar link aleatório** e **Gerar link fixo** geram e copiam o endereço.
+O segundo abre um modal com `stream` preenchido e permite escolher outro código.
+Listar, assistir e copiar o link original não chamam o encurtador. Códigos de outra chave retornam
+409 `SHORT_LINK_CODE_UNAVAILABLE`. Outras falhas retornam 503 sem expor credenciais.

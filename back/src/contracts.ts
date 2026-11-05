@@ -60,6 +60,12 @@ export const renewSchema = z.object({ key: keySchema }).strict();
 export const downloadSchema = z.object({ key: keySchema }).strict();
 export const deleteSchema = z.object({ key: keySchema }).strict();
 export const streamSchema = z.object({ key: keySchema }).strict();
+export const shortSchema = streamSchema.extend({
+  code: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9_-]{0,63}$/)
+    .optional(),
+});
 export const listSchema = z
   .object({ q: z.string().max(220).default(''), cursor: z.string().max(16384).optional() })
   .strict();

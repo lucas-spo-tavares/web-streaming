@@ -16,4 +16,6 @@ export const useCreateStreamLink = () =>
   });
 
 export const useCreateShortLink = () =>
-  useMutation({ mutationFn: (key: string) => shortLink(key) });
+  useMutation({
+    mutationFn: ({ key, code }: { key: string; code?: string }) => shortLink(key, code),
+  });

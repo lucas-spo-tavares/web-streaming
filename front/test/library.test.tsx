@@ -93,7 +93,35 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+async function openActions() {
+  const trigger = await screen.findByRole('button', { name: 'Mais ações de vídeo.mp4' });
+  await waitFor(() => expect((trigger as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(trigger);
+}
+
 describe('file actions', () => {
+  it('keeps secondary actions in the menu and supports keyboard and outside dismissal', async () => {
+    setup();
+    const trigger = await screen.findByRole('button', { name: 'Mais ações de vídeo.mp4' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('menuitem')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Gerar link fixo de vídeo.mp4' })).toBeTruthy();
+    fireEvent.click(trigger);
+    const menu = screen.getByRole('menu', { name: 'Ações de vídeo.mp4' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Baixar vídeo.mp4' }));
+    fireEvent.keyDown(menu, { key: 'End' });
+    expect(document.activeElement).toBe(
+      screen.getByRole('menuitem', { name: 'Excluir vídeo.mp4' }),
+    );
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Baixar vídeo.mp4' }));
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
   it('keeps the shared header when watching a video and returning to the library', async () => {
     const api = setup();
     const header = screen.getByRole('banner');
@@ -113,34 +141,72 @@ describe('file actions', () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const api = setup();
-    const shortButton = await screen.findByRole('button', {
-      name: 'Copiar link curto de vídeo.mp4',
-    });
+    await openActions();
     expect(api.short).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Copiar link de vídeo.mp4' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copiar link de vídeo.mp4' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://media.test/signed'));
     expect(api.short).not.toHaveBeenCalled();
-    await waitFor(() => expect((shortButton as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(shortButton);
+    await openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Gerar link aleatório de vídeo.mp4' }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith('https://link.lucas-tavares.com/abcdef'),
     );
-    expect(api.short).toHaveBeenCalledExactlyOnceWith(file.key);
+    expect(api.short).toHaveBeenCalledExactlyOnceWith(file.key, undefined);
     expect(api.stream).toHaveBeenCalledOnce();
   });
   it('shows a shortener failure and re-enables the short link button', async () => {
     const api = setup();
+    await openActions();
     api.short.mockRejectedValueOnce(new Error('Encurtador indisponível.'));
-    const button = await screen.findByRole('button', { name: 'Copiar link curto de vídeo.mp4' });
+    const button = await screen.findByRole('menuitem', {
+      name: 'Gerar link aleatório de vídeo.mp4',
+    });
     fireEvent.click(button);
     expect(await screen.findByText('Encurtador indisponível.')).toBeTruthy();
-    expect((button as HTMLButtonElement).disabled).toBe(false);
+    await openActions();
+    expect(
+      (
+        screen.getByRole('menuitem', {
+          name: 'Gerar link aleatório de vídeo.mp4',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   });
 
+  it('opens the fixed link modal with stream and sends the chosen code', async () => {
+    const api = setup();
+    fireEvent.click(await screen.findByRole('button', { name: 'Gerar link fixo de vídeo.mp4' }));
+    expect(screen.getByRole('dialog', { name: 'Gerar link fixo' })).toBeTruthy();
+    const input = screen.getByLabelText('Código do link fixo') as HTMLInputElement;
+    expect(input.value).toBe('stream');
+    expect(api.short).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: 'minha-stream' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar link fixo' }));
+    await waitFor(() =>
+      expect(api.short).toHaveBeenCalledExactlyOnceWith(file.key, 'minha-stream'),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+  it('allows cancelling and keeps the modal open on generation failure', async () => {
+    const api = setup();
+    const open = await screen.findByRole('button', { name: 'Gerar link fixo de vídeo.mp4' });
+    fireEvent.click(open);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(api.short).not.toHaveBeenCalled();
+    fireEvent.click(open);
+    api.short.mockRejectedValueOnce(new Error('Código indisponível.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Gerar link fixo' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Código indisponível.');
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Gerar link fixo' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+  });
   it('renews the selected video and refreshes its expiry', async () => {
     const api = setup();
+    await openActions();
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Reiniciar expiração de vídeo.mp4' }),
+      await screen.findByRole('menuitem', { name: 'Reiniciar expiração de vídeo.mp4' }),
     );
     await waitFor(() => expect(api.renew).toHaveBeenCalledWith(file.key));
     expect(await screen.findByText(/Prazo de vídeo.mp4 reiniciado/)).toBeTruthy();
@@ -154,18 +220,20 @@ describe('file actions', () => {
       expect(this.download).toBe(file.name);
     });
     const api = setup();
-    fireEvent.click(await screen.findByRole('button', { name: 'Baixar vídeo.mp4' }));
+    await openActions();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Baixar vídeo.mp4' }));
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
     expect(api.download).toHaveBeenCalledWith(file.key, expect.any(AbortSignal));
     expect(screen.getByText('Download de vídeo.mp4 iniciado.')).toBeTruthy();
   });
   it('allows renewing a pending expired video while blocking download', async () => {
     setup(true);
-    const button = await screen.findByRole('button', { name: 'Baixar vídeo.mp4' });
+    await openActions();
+    const button = await screen.findByRole('menuitem', { name: 'Baixar vídeo.mp4' });
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(
       (
-        screen.getByRole('button', {
+        screen.getByRole('menuitem', {
           name: 'Reiniciar expiração de vídeo.mp4',
         }) as HTMLButtonElement
       ).disabled,
@@ -173,14 +241,16 @@ describe('file actions', () => {
   });
   it('reports a renewal failure and re-enables the actions', async () => {
     const api = setup();
+    await openActions();
     vi.mocked(api.renew).mockRejectedValue(new Error('Não foi possível renovar.'));
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Reiniciar expiração de vídeo.mp4' }),
+      await screen.findByRole('menuitem', { name: 'Reiniciar expiração de vídeo.mp4' }),
     );
     expect(await screen.findByText('Não foi possível renovar.')).toBeTruthy();
+    await openActions();
     expect(
       (
-        screen.getByRole('button', {
+        screen.getByRole('menuitem', {
           name: 'Reiniciar expiração de vídeo.mp4',
         }) as HTMLButtonElement
       ).disabled,

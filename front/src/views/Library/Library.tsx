@@ -1,6 +1,7 @@
 import { LibraryTable } from './componentes/LibraryTable';
 import { UploadItem } from './componentes/UploadItem';
 import { FileDrop } from './componentes/FileDrop';
+import { FixedLinkDialog } from './componentes/FixedLinkDialog';
 import { useUploadJob } from '@/server-state/uploads';
 import { useCreateStreamLink, useCreateShortLink } from '@/server-state/stream-links';
 import { useDownloadLink } from '@/server-state/download-links';
@@ -44,6 +45,7 @@ export function Library() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [copying, setCopying] = useState<string | null>(null);
   const [shortening, setShortening] = useState<string | null>(null);
+  const [fixedLink, setFixedLink] = useState<{ key: string; name: string } | null>(null);
   const busy =
     shortening !== null ||
     copying !== null ||
@@ -87,15 +89,17 @@ export function Library() {
     if (input.current) input.current.value = '';
   }
 
-  async function copy(key: string, name: string, short = false) {
-    if (busy) return;
+  async function copy(key: string, name: string, short = false, code?: string) {
+    if (busy) return false;
 
     if (short) setShortening(key);
     else setCopying(key);
     setNotice('');
 
     try {
-      const result = await (short ? shortLink : streamLink).mutateAsync(key);
+      const result = short
+        ? await shortLink.mutateAsync({ key, code })
+        : await streamLink.mutateAsync(key);
       setLink({ ...result, name, key });
 
       try {
@@ -105,8 +109,12 @@ export function Library() {
       } catch {
         setNotice('Link gerado. Selecione e copie o endereço abaixo para abrir no VLC.');
       }
+
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Falha ao gerar link.');
+
+      return false;
     } finally {
       setCopying(null);
       setShortening(null);
@@ -292,6 +300,10 @@ export function Library() {
               renewing={renewing}
               deleting={deleting}
               copy={copy}
+              fixed={(key, name) => {
+                setNotice('');
+                setFixedLink({ key, name });
+              }}
               download={download}
               renew={renew}
               remove={remove}
@@ -368,6 +380,17 @@ export function Library() {
         )}
       </div>
       <Outlet />
+      {fixedLink && (
+        <FixedLinkDialog
+          name={fixedLink.name}
+          busy={busy}
+          error={notice}
+          onClose={() => setFixedLink(null)}
+          onGenerate={async (code) => {
+            if (await copy(fixedLink.key, fixedLink.name, true, code)) setFixedLink(null);
+          }}
+        />
+      )}
     </>
   );
 }

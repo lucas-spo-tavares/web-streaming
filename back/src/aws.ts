@@ -32,8 +32,11 @@ export function validateConfiguration() {
   assertValid(validateBackend(process.env));
 }
 
-export async function shorten(url: string) {
-  return shortenLink(url, await secretValue(required('SHORT_LINK_PARAMETER_ARN')));
+export async function shorten(url: string, expiresAt: string, code?: string) {
+  return shortenLink(url, await secretValue(required('SHORT_LINK_PARAMETER_ARN')), {
+    expiresAt,
+    code,
+  });
 }
 
 export function mediaDomain() {

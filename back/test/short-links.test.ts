@@ -42,7 +42,14 @@ describe('short links', () => {
     expect(shorten).not.toHaveBeenCalled();
     const short = await handleRequest(event() as never, undefined, () => {});
     expect(short.statusCode).toBe(200);
-    expect(shorten).toHaveBeenCalledExactlyOnceWith('https://media.test/signed');
+    expect(shorten).toHaveBeenCalledExactlyOnceWith(
+      'https://media.test/signed',
+      JSON.parse(regular.body).expiresAt,
+      undefined,
+    );
+    expect(Date.parse(JSON.parse(short.body).expiresAt) - Math.floor(timestamp / 1000) * 1000).toBe(
+      4 * 60 * 60 * 1000,
+    );
     expect(JSON.parse(short.body)).toEqual({
       ...JSON.parse(regular.body),
       url: 'https://link.lucas-tavares.com/abcdef',
@@ -74,6 +81,50 @@ describe('short links', () => {
     ).toBe(400);
     expect(shorten).not.toHaveBeenCalled();
   });
+  it('forwards a chosen code and rejects invalid codes before signing or shortening', async () => {
+    const { event, shorten } = fixture();
+    const result = await handleRequest(
+      event('POST /short-links', undefined, { key, code: 'stream' }) as never,
+      undefined,
+      () => {},
+    );
+    expect(result.statusCode).toBe(200);
+    expect(shorten).toHaveBeenCalledWith(
+      'https://media.test/signed',
+      JSON.parse(result.body).expiresAt,
+      'stream',
+    );
+    for (const code of ['', 'Stream', '../stream', 'a'.repeat(65), null, 123]) {
+      expect(
+        (
+          await handleRequest(
+            event('POST /short-links', undefined, { key, code }) as never,
+            undefined,
+            () => {},
+          )
+        ).statusCode,
+      ).toBe(400);
+    }
+    expect(shorten).toHaveBeenCalledOnce();
+    expect(signStream).toHaveBeenCalledOnce();
+  });
+  it('limits short link expiry to the remaining file retention', async () => {
+    const { event, shorten } = fixture();
+    const expiry = Math.floor((timestamp + 60000) / 1000) * 1000;
+    vi.mocked(s3Repository.head).mockResolvedValue({
+      key,
+      size: 100,
+      created: new Date(timestamp),
+      expires: new Date(expiry),
+    });
+    const result = await handleRequest(event() as never, undefined, () => {});
+    expect(JSON.parse(result.body).expiresAt).toBe(new Date(expiry).toISOString());
+    expect(shorten).toHaveBeenCalledWith(
+      'https://media.test/signed',
+      new Date(expiry).toISOString(),
+      undefined,
+    );
+  });
   it('does not shorten expired or missing files', async () => {
     const { event, shorten } = fixture();
     vi.mocked(s3Repository.head)
@@ -84,13 +135,14 @@ describe('short links', () => {
     expect(shorten).not.toHaveBeenCalled();
   });
   it('sends the signed URL and server key using the documented contract', async () => {
+    const expiresAt = new Date(timestamp + 4 * 60 * 60 * 1000).toISOString();
     const request = vi.fn<typeof fetch>(
       async () =>
         new Response(JSON.stringify({ shortUrl: 'https://link.lucas-tavares.com/abcdef' }), {
           status: 201,
         }),
     );
-    expect(await shortenLink('https://media.test/signed', 'test-key', request)).toBe(
+    expect(await shortenLink('https://media.test/signed', 'test-key', { expiresAt }, request)).toBe(
       'https://link.lucas-tavares.com/abcdef',
     );
     expect(request).toHaveBeenCalledWith(
@@ -98,9 +150,32 @@ describe('short links', () => {
       expect.objectContaining({
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': 'test-key' },
-        body: JSON.stringify({ url: 'https://media.test/signed' }),
+        body: JSON.stringify({ url: 'https://media.test/signed', expiresAt, maxAccesses: 5 }),
       }),
     );
+  });
+  it('sends the fixed code and reports an unavailable code without exposing details', async () => {
+    const options = { code: 'stream', expiresAt: new Date(timestamp + 14400000).toISOString() };
+    const request = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ shortUrl: 'https://link.lucas-tavares.com/stream' })),
+    );
+    expect(await shortenLink('https://media.test/signed', 'test-key', options, request)).toBe(
+      'https://link.lucas-tavares.com/stream',
+    );
+    expect(JSON.parse(request.mock.calls[0][1]!.body as string)).toEqual({
+      url: 'https://media.test/signed',
+      ...options,
+      maxAccesses: 5,
+    });
+    await expect(
+      shortenLink(
+        'https://media.test/signed',
+        'test-key',
+        options,
+        async () => new Response('private diagnostic', { status: 403 }),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: 'SHORT_LINK_CODE_UNAVAILABLE' });
   });
   it.each([
     new Response('private diagnostic', { status: 401 }),
@@ -111,6 +186,7 @@ describe('short links', () => {
       shortenLink(
         'https://media.test/signed',
         'test-key',
+        { expiresAt: new Date(timestamp + 14400000).toISOString() },
         vi.fn(async () => response),
       ),
     ).rejects.toMatchObject({ status: 503, code: 'SHORT_LINK_UNAVAILABLE' });

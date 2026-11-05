@@ -21,6 +21,7 @@ import {
   RETENTION_MS,
   startSchema,
   streamSchema,
+  shortSchema,
 } from './contracts.js';
 import {
   ApiError,
@@ -233,8 +234,9 @@ export async function download(input: unknown) {
 }
 
 export async function short(input: unknown) {
-  const result = await stream(input);
-  return { ...result, url: await shorten(result.url) };
+  const { key, code } = shortSchema.parse(input);
+  const result = await stream({ key });
+  return { ...result, url: await shorten(result.url, result.expiresAt, code) };
 }
 
 export async function expireFiles() {

@@ -1,5 +1,16 @@
 import { Link } from 'react-router';
-import { Copy, Download, FileVideo2, Link2, Loader2, Play, RotateCcw, Trash2 } from 'lucide-react';
+import { FileActionsMenu } from './FileActionsMenu';
+import {
+  Copy,
+  Download,
+  FileVideo2,
+  Link2,
+  Loader2,
+  Play,
+  RotateCcw,
+  Shuffle,
+  Trash2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -20,7 +31,8 @@ interface LibraryTableProps {
   downloading: string | null;
   renewing: string | null;
   deleting: string | null;
-  copy: (key: string, name: string, short?: boolean) => Promise<void>;
+  copy: (key: string, name: string, short?: boolean) => Promise<boolean>;
+  fixed: (key: string, name: string) => void;
   download: (key: string, name: string) => Promise<void>;
   renew: (key: string, name: string) => Promise<void>;
   remove: (key: string, name: string) => Promise<void>;
@@ -36,6 +48,7 @@ export function LibraryTable({
   renewing,
   deleting,
   copy,
+  fixed,
   download,
   renew,
   remove,
@@ -108,53 +121,74 @@ export function LibraryTable({
                     variant="outline"
                     size="sm"
                     disabled={expired || busy}
-                    aria-label={`Copiar link de ${file.name}`}
-                    onClick={() => void copy(file.key, file.name)}
+                    aria-label={`Gerar link fixo de ${file.name}`}
+                    onClick={() => fixed(file.key, file.name)}
                   >
-                    {copying === file.key ? <Loader2 className="animate-spin" /> : <Copy />}
-                    <span className="hidden sm:inline">Copiar link</span>
+                    <Link2 />
+                    <span className="hidden sm:inline">Link fixo</span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={expired || busy}
-                    aria-label={`Copiar link curto de ${file.name}`}
-                    onClick={() => void copy(file.key, file.name, true)}
-                  >
-                    {shortening === file.key ? <Loader2 className="animate-spin" /> : <Link2 />}
-                    <span className="hidden sm:inline">Copiar link curto</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={expired || busy}
-                    aria-label={`Baixar ${file.name}`}
-                    onClick={() => void download(file.key, file.name)}
-                  >
-                    {downloading === file.key ? <Loader2 className="animate-spin" /> : <Download />}
-                    <span className="hidden sm:inline">Baixar</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    aria-label={`Reiniciar expiração de ${file.name}`}
-                    onClick={() => void renew(file.key, file.name)}
-                  >
-                    {renewing === file.key ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-                    <span className="hidden sm:inline">Reiniciar prazo</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-1 text-destructive hover:text-destructive"
-                    disabled={busy}
-                    aria-label={`Excluir ${file.name}`}
-                    onClick={() => void remove(file.key, file.name)}
-                  >
-                    {deleting === file.key ? <Loader2 className="animate-spin" /> : <Trash2 />}
-                    <span className="hidden sm:inline">Excluir</span>
-                  </Button>
+                  <FileActionsMenu name={file.name} busy={busy}>
+                    <Button
+                      role="menuitem"
+                      variant="ghost"
+                      size="sm"
+                      disabled={expired || busy}
+                      aria-label={`Baixar ${file.name}`}
+                      onClick={() => void download(file.key, file.name)}
+                    >
+                      {downloading === file.key ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Download />
+                      )}
+                      <span>Baixar</span>
+                    </Button>
+                    <Button
+                      role="menuitem"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      aria-label={`Reiniciar expiração de ${file.name}`}
+                      onClick={() => void renew(file.key, file.name)}
+                    >
+                      {renewing === file.key ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+                      <span>Reiniciar prazo</span>
+                    </Button>
+                    <Button
+                      role="menuitem"
+                      variant="ghost"
+                      size="sm"
+                      disabled={expired || busy}
+                      aria-label={`Copiar link de ${file.name}`}
+                      onClick={() => void copy(file.key, file.name)}
+                    >
+                      {copying === file.key ? <Loader2 className="animate-spin" /> : <Copy />}
+                      <span>Copiar link</span>
+                    </Button>
+                    <Button
+                      role="menuitem"
+                      variant="ghost"
+                      size="sm"
+                      disabled={expired || busy}
+                      aria-label={`Gerar link aleatório de ${file.name}`}
+                      onClick={() => void copy(file.key, file.name, true)}
+                    >
+                      {shortening === file.key ? <Loader2 className="animate-spin" /> : <Shuffle />}
+                      <span>Gerar link aleatório</span>
+                    </Button>
+                    <Button
+                      role="menuitem"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={busy}
+                      aria-label={`Excluir ${file.name}`}
+                      onClick={() => void remove(file.key, file.name)}
+                    >
+                      {deleting === file.key ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                      <span>Excluir</span>
+                    </Button>
+                  </FileActionsMenu>
                 </div>
               </TableCell>
             </TableRow>
