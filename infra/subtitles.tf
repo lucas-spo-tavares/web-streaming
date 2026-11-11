@@ -34,17 +34,16 @@ resource "aws_iam_role_policy" "subtitles" {
   ] })
 }
 resource "aws_lambda_function" "subtitles" {
-  function_name                  = "${var.name}-subtitle-extract"
-  role                           = aws_iam_role.subtitles.arn
-  runtime                        = "python3.13"
-  architectures                  = ["x86_64"]
-  handler                        = "handler.handler"
-  filename                       = data.archive_file.subtitles.output_path
-  source_code_hash               = data.archive_file.subtitles.output_base64sha256
-  layers                         = [aws_lambda_layer_version.ffmpeg.arn]
-  memory_size                    = 1024
-  timeout                        = 900
-  reserved_concurrent_executions = 2
+  function_name    = "${var.name}-subtitle-extract"
+  role             = aws_iam_role.subtitles.arn
+  runtime          = "python3.13"
+  architectures    = ["x86_64"]
+  handler          = "handler.handler"
+  filename         = data.archive_file.subtitles.output_path
+  source_code_hash = data.archive_file.subtitles.output_base64sha256
+  layers           = [aws_lambda_layer_version.ffmpeg.arn]
+  memory_size      = 1024
+  timeout          = 900
   environment {
     variables = {
       MEDIA_BUCKET    = aws_s3_bucket.app["media"].id

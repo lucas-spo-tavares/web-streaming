@@ -18,7 +18,7 @@ O término do upload multipart no S3 dispara uma Lambda separada em Python 3.13.
 
 O FFprobe identifica as faixas. O FFmpeg faz uma passagem pelo vídeo para produzir SRT e WebVTT para todas as faixas de texto compatíveis. O vídeo original permanece intacto, sem transcodificação de áudio ou vídeo. A entrada é uma URL S3 temporária, para não precisar copiar vídeos de até 20 GiB para `/tmp`. Isso ainda pode transferir o arquivo inteiro do S3 para a Lambda.
 
-O worker usa até 15 minutos, 1 GiB de memória e concorrência reservada de duas execuções. São aceitas até 32 faixas, com até 2 MiB por arquivo de legenda. O tempo de FFmpeg reserva 30 segundos para publicar os resultados. As pastas temporárias são removidas ao terminar, inclusive em falhas.
+O worker usa até 15 minutos e 1 GiB de memória. Não há reserva de concorrência: ele compartilha a concorrência não reservada da conta, respeitando a cota regional disponível. São aceitas até 32 faixas, com até 2 MiB por arquivo de legenda. O tempo de FFmpeg reserva 30 segundos para publicar os resultados. As pastas temporárias são removidas ao terminar, inclusive em falhas.
 
 Faixas SubRip, ASS/SSA, WebVTT, mov_text e texto são convertidas. ASS/SSA perdem estilos, posicionamentos e fontes ao virar SRT/WebVTT. PGS, VobSub e outros formatos em imagem são listados como não suportados; não há OCR.
 
