@@ -9,11 +9,11 @@ O projeto é um monorepo com **React no front**, **Lambdas Node.js no back** e *
 - Login por OTP de email na própria página, exclusivo do proprietário, sem cadastro público.
 - Lista simples com busca por parte do nome em toda a biblioteca.
 - Upload de múltiplos arquivos com progresso, cancelamento e repetição de partes com falha.
-- Arquivos armazenados diretamente na raiz do bucket, sem sistema de pastas.
+- Cada vídeo armazenado em uma pasta UUID, junto das legendas e do manifesto de faixas.
 - Exibição do tempo restante até o fim da retenção de **30 dias**.
 - Links HTTPS assinados pelo CloudFront, válidos por até **4 horas**, para abrir no VLC.
 
-Os vídeos são entregues no formato original. Não há player no navegador, transcodificação ou geração de HLS/DASH. O contêiner e os codecs precisam ser compatíveis com o VLC.
+Os vídeos são entregues no formato original, com player no navegador e links para VLC. Não há transcodificação de áudio/vídeo ou geração de HLS/DASH. Uma Lambda Python com Layer FFmpeg/FFprobe extrai as legendas após o upload, sem alterar o vídeo; veja [legendas e organização do bucket](docs/subtitles.md).
 
 ## Como funciona
 
@@ -332,7 +332,7 @@ Os uploads aceitam apenas vídeos, com validação de extensão e MIME compartil
 
 O limite padrão por arquivo é **20 GiB**, ajustável para baixo por `TF_VAR_max_upload_bytes`. Os uploads usam partes de **16 MiB**, até três partes simultâneas por arquivo e URLs de partes válidas por 15 minutos. A sessão dura até 24 horas; fechar a página perde a retomada local. Partes abandonadas são removidas pelo Lifecycle.
 
-Cada chave tem o formato `<uuid>--<nome-original>` na raiz do bucket. Nomes repetidos permanecem como arquivos diferentes, e a interface exibe o nome original.
+Cada chave de vídeo tem o formato `<uuid>/<nome-original>`. A mesma pasta guarda `tracks.json` e os arquivos SRT/WebVTT extraídos. Nomes repetidos permanecem como vídeos diferentes. A biblioteca lista apenas os vídeos; excluir um vídeo remove a pasta daquele UUID. O player carrega o manifesto e a faixa selecionada por rotas GET autenticadas, sem extração no navegador.
 
 O prazo inicial de 30 dias usa `LastModified` do S3; em multipart, esse marco corresponde ao início do upload. **Reiniciar prazo** define um novo vencimento para 30 dias a partir de agora, sem copiar o vídeo nem mudar a data original de envio. As renovações são registradas no DynamoDB. A aplicação encerra novos acessos ao fim do prazo, e uma Lambda acionada a cada hora remove os vídeos expirados. O Lifecycle do S3 remove apenas partes de uploads abandonados. Um vídeo expirado ainda presente pode ser renovado enquanto sua exclusão não tiver começado.
 

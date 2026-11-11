@@ -21,6 +21,8 @@ export const OPERATIONS = [
   'renew',
   'download',
   'cleanup',
+  'subtitles',
+  'subtitle',
 ];
 export const MAX_UPLOAD_BYTES = 21474836480;
 export const REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d+$/;

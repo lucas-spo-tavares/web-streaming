@@ -15,4 +15,6 @@ node_modules/
 *.pem
 *.key
 infra/.build/
+__pycache__/
+*.py[cod]
 !.env.deploy.example

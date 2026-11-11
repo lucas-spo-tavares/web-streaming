@@ -16,6 +16,8 @@ import {
   startSchema,
   streamSchema,
   shortSchema,
+  subtitleSchema,
+  subtitleManifestSchema,
 } from '@/contracts';
 import {
   ApiError,
@@ -77,6 +79,44 @@ export async function stream(input: unknown) {
   };
 }
 
+export async function subtitles(input: unknown) {
+  const { uuid, track } = subtitleSchema.parse(input);
+  const object = await s3Repository.findVideo(uuid);
+  if (!object || object.deleting) throw missing();
+  const key = object.key;
+  linkExpiry(object.created, Date.now(), RETENTION_MS, object.expires);
+  const prefix = uuid + '/';
+  const text = await s3Repository.readText(prefix + 'tracks.json', 65536);
+  if (!text) {
+    if (track !== undefined) throw missing();
+    const stale = Date.now() - object.created.getTime() > 20 * 60000;
+    return {
+      status: stale ? 'failed' : 'processing',
+      tracks: [],
+      ...(stale ? { message: 'A extração de legendas não terminou.' } : {}),
+    };
+  }
+  const validated = subtitleManifestSchema.safeParse(JSON.parse(text));
+  if (!validated.success) throw new Error('Invalid subtitle manifest');
+  const manifest = validated.data;
+  if (manifest.key !== key) throw missing();
+  if (
+    track === undefined &&
+    manifest.status === 'processing' &&
+    Date.now() - object.created.getTime() > 20 * 60000
+  )
+    return { status: 'failed', tracks: [], message: 'A extração de legendas não terminou.' };
+  if (track === undefined)
+    return { status: manifest.status, tracks: manifest.tracks, message: manifest.message };
+  const selected = manifest.tracks.find(
+    (item) => item.number === track && item.supported && item.vtt,
+  );
+  if (manifest.status !== 'ready' || !selected) throw missing();
+  const vtt = await s3Repository.readText(prefix + selected.vtt!);
+  if (!vtt?.startsWith('WEBVTT')) throw missing();
+  return vtt;
+}
+
 export async function list(input: unknown, sub: string) {
   const { q: query, cursor } = listSchema.parse(input);
   const q = query.trim().toLowerCase();
@@ -103,7 +143,7 @@ export async function start(input: unknown, sub: string) {
   if (data.size > maxBytes)
     throw new ApiError(413, 'FILE_TOO_LARGE', 'Arquivo excede o limite de upload.');
   const secret = await ticketSecret();
-  const key = `${randomUUID()}--${data.name}`;
+  const key = `${randomUUID()}/${data.name}`;
   const nonce = randomUUID();
   const uploadId = await s3Repository.start(key, data.contentType, {
     'session-id': nonce,
@@ -221,7 +261,7 @@ export async function download(input: unknown) {
     serverNow + 15 * 60000,
   );
   return {
-    url: await s3Repository.signDownload(key, key.slice(38), expiry),
+    url: await s3Repository.signDownload(key, key.split('/')[1], expiry),
     expiresAt: new Date(expiry).toISOString(),
     serverNow: new Date(serverNow).toISOString(),
   };

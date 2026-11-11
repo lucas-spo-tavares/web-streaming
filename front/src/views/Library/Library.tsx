@@ -164,7 +164,7 @@ export function Library() {
 
     if (
       !window.confirm(
-        `Excluir “${name}” permanentemente? Esta ação não pode ser desfeita. Links já gerados podem continuar disponíveis até expirar.`,
+        `Excluir “${name}” e suas legendas permanentemente? Esta ação não pode ser desfeita. Links já gerados podem continuar disponíveis até expirar.`,
       )
     )
       return;

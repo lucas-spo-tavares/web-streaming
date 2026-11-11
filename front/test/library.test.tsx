@@ -13,6 +13,10 @@ import { download } from '../src/services/download-links';
 import { stream, shortLink } from '../src/services/stream-links';
 
 vi.mock('../src/services/stream-links', () => ({ stream: vi.fn(), shortLink: vi.fn() }));
+vi.mock('../src/services/subtitles', () => ({
+  subtitles: vi.fn().mockResolvedValue({ status: 'ready', tracks: [] }),
+  subtitleText: vi.fn(),
+}));
 
 vi.mock('../src/services/files', () => ({
   list: vi.fn(),
@@ -24,7 +28,7 @@ vi.mock('../src/services/download-links', () => ({
 }));
 
 const file = {
-  key: '12345678-1234-4123-8123-123456789abc--vídeo.mp4',
+  key: '12345678-1234-4123-8123-123456789abc/vídeo.mp4',
   name: 'vídeo.mp4',
   size: 100,
   createdAt: new Date().toISOString(),

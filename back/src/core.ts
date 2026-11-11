@@ -24,7 +24,7 @@ export function fileInfo(
   const expires = retainedUntil?.getTime() ?? created.getTime() + retention;
   return {
     key,
-    name: key.slice(38),
+    name: key.split('/')[1],
     size,
     createdAt: created.toISOString(),
     expiresAt: new Date(expires).toISOString(),
@@ -32,10 +32,15 @@ export function fileInfo(
   };
 }
 export function encodeKey(key: string) {
-  return encodeURIComponent(key).replace(
-    /[!'()*]/g,
-    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
+  return key
+    .split('/')
+    .map((part) =>
+      encodeURIComponent(part).replace(
+        /[!'()*]/g,
+        (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+      ),
+    )
+    .join('/');
 }
 export function linkExpiry(
   created: Date,

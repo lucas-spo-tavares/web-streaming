@@ -14,6 +14,7 @@ import {
   stream,
   short,
   expireFiles,
+  subtitles,
 } from '@/service';
 import { validateConfiguration } from '@/aws';
 
@@ -29,6 +30,8 @@ const service = {
   download,
   stream,
   short,
+  subtitles,
+  subtitle: subtitles,
 };
 const routes: Record<string, keyof typeof service> = {
   'GET /files': 'list',
@@ -41,6 +44,8 @@ const routes: Record<string, keyof typeof service> = {
   'POST /uploads/abort': 'abort',
   'POST /stream-links': 'stream',
   'POST /short-links': 'short',
+  'GET /videos/{uuid}/subtitles': 'subtitles',
+  'GET /videos/{uuid}/subtitles/{track}': 'subtitle',
 };
 export function authorize(event: Event) {
   const claims = event.requestContext.authorizer?.jwt?.claims;
@@ -74,6 +79,7 @@ export async function handleRequest(
       throw new ApiError(404, 'NOT_FOUND', 'Operação não encontrada.');
     let input: unknown;
     if (action === 'list') input = event.queryStringParameters ?? {};
+    else if (action === 'subtitles' || action === 'subtitle') input = event.pathParameters ?? {};
     else {
       const body = event.isBase64Encoded
         ? Buffer.from(event.body ?? '', 'base64').toString()
@@ -89,7 +95,13 @@ export async function handleRequest(
     validateConfiguration();
     const result = await service[action](input, sub);
     logger({ requestId, operation: action, status: 200 });
-    return { statusCode: 200, headers, body: JSON.stringify(result) };
+    return typeof result === 'string'
+      ? {
+          statusCode: 200,
+          headers: { ...headers, 'content-type': 'text/vtt; charset=utf-8' },
+          body: result,
+        }
+      : { statusCode: 200, headers, body: JSON.stringify(result) };
   } catch (error) {
     const normalized =
       error instanceof ZodError

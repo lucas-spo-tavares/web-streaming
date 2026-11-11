@@ -18,10 +18,10 @@ export const nameSchema = z
     'Nome inválido',
   );
 export const keySchema = z.string().refine((v) => {
-  const match = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}--(.+)$/u.exec(
+  const match = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/(.+)$/u.exec(
     v,
   );
-  return Boolean(match && nameSchema.safeParse(match[1]).success);
+  return Boolean(match && nameSchema.safeParse(match[1]).success && videoContentType(match[1]));
 }, 'Chave inválida');
 export const startSchema = z
   .object({
@@ -60,6 +60,39 @@ export const renewSchema = z.object({ key: keySchema }).strict();
 export const downloadSchema = z.object({ key: keySchema }).strict();
 export const deleteSchema = z.object({ key: keySchema }).strict();
 export const streamSchema = z.object({ key: keySchema }).strict();
+export const subtitleSchema = z
+  .object({
+    uuid: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+    track: z.coerce.number().int().min(0).max(255).optional(),
+  })
+  .strict();
+export const subtitleManifestSchema = z.object({
+  key: keySchema,
+  sourceETag: z.string(),
+  status: z.enum(['processing', 'ready', 'failed']),
+  message: z.string().max(256).optional(),
+  tracks: z
+    .array(
+      z.object({
+        number: z.number().int().min(0).max(255),
+        language: z.string().max(32),
+        label: z.string().max(256),
+        codec: z.string().max(64),
+        default: z.boolean(),
+        forced: z.boolean(),
+        supported: z.boolean(),
+        srt: z
+          .string()
+          .regex(/^\d+-[a-zA-Z0-9-]+\.srt$/)
+          .optional(),
+        vtt: z
+          .string()
+          .regex(/^\d+-[a-zA-Z0-9-]+\.vtt$/)
+          .optional(),
+      }),
+    )
+    .max(32),
+});
 export const shortSchema = streamSchema.extend({
   code: z
     .string()

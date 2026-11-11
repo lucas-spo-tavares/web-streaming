@@ -15,6 +15,7 @@
     "deploy:back": "node scripts/with-env.mjs .env.deploy node scripts/deploy.mjs back",
     "deploy:front": "node scripts/with-env.mjs .env.deploy node scripts/deploy.mjs front",
     "build": "npm run build --workspaces",
+    "build:subtitles": "bash scripts/build-subtitles.sh",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint front/src back/src",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm run build",

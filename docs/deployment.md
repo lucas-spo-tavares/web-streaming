@@ -53,6 +53,8 @@ Os comandos seguintes são executados manualmente. Não há pipeline de CI nem c
 
 ## Infraestrutura
 
+A extração de legendas usa uma Layer local com FFmpeg/FFprobe, sem ECR. Execute `npm run build:subtitles` antes de validar ou planejar a infraestrutura em um checkout novo. Esse comando usa Docker para gerar `infra/.build/subtitles/ffmpeg-layer.zip`; não publica a Layer nem envia o ZIP a um bucket. O `deploy:back` foi preparado para incluir esse build. Detalhes e teste local estão em [legendas](subtitles.md).
+
 ```sh
 npm ci
 npm run check

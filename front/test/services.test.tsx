@@ -4,6 +4,7 @@ import { http } from '../src/services/http';
 import { auth } from '../src/services/auth';
 import { list, remove } from '../src/services/files';
 import { ApiError } from '../src/services/types';
+import { subtitles, subtitleText } from '../src/services/subtitles';
 
 vi.mock('../src/services/auth', () => ({
   auth: { token: vi.fn(), refresh: vi.fn(), snapshot: vi.fn(), clear: vi.fn() },
@@ -45,6 +46,27 @@ function unauthorized(config: InternalAxiosRequestConfig) {
 }
 
 describe('authenticated services', () => {
+  it('reads subtitle metadata and WebVTT through JWT-protected UUID GET routes', async () => {
+    const key = '12345678-1234-4123-8123-123456789abc/filme #1.mkv';
+    http.defaults.adapter = async (config) => {
+      expect(config.headers.get('Authorization')).toBe('Bearer access-token');
+      expect(config.method).toBe('get');
+      expect(config.data).toBeUndefined();
+      const selected = config.url?.endsWith('/3');
+      expect(config.url).toBe(
+        `/videos/12345678-1234-4123-8123-123456789abc/subtitles${selected ? '/3' : ''}`,
+      );
+      return {
+        config,
+        data: selected ? 'WEBVTT\n\n' : { status: 'ready', tracks: [] },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+      };
+    };
+    expect(await subtitles(key)).toEqual({ status: 'ready', tracks: [] });
+    expect(await subtitleText(key, 3)).toBe('WEBVTT\n\n');
+  });
   it('attaches the current token and sends the delete body', async () => {
     http.defaults.adapter = async (config) => {
       expect(config.headers.get('Authorization')).toBe('Bearer access-token');

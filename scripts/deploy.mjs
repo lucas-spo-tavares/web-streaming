@@ -13,6 +13,7 @@ export function deploy(target, run = execFileSync) {
   if (target === 'back') {
     execute('npm', ['run', 'env:check', '--', '--target', 'deploy']);
     execute('npm', ['run', 'build', '-w', 'back']);
+    execute('npm', ['run', 'build:subtitles']);
     execute('terraform', ['-chdir=infra', 'init', '-input=false']);
     execute('terraform', ['-chdir=infra', 'fmt', '-check', '-recursive']);
     execute('terraform', ['-chdir=infra', 'validate']);

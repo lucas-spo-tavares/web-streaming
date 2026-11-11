@@ -1,19 +1,35 @@
 import { useStreamLink } from '@/server-state/stream-links';
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Film, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Subtitles } from './Subtitles';
 
 export function Player() {
   const { fileName = '' } = useParams();
-  // S3 stores the original filename after a unique UUID prefix, avoiding duplicate-name ambiguity.
-  const name = fileName.replace(/^[0-9a-f-]{36}--/, '');
+
+  return <FilePlayer key={fileName} fileName={fileName} />;
+}
+
+function FilePlayer({ fileName }: { fileName: string }) {
+  const name = fileName.split('/').at(-1) ?? '';
   const stream = useStreamLink(fileName);
   const link = stream.data;
   const [playbackError, setError] = useState('');
   const error = playbackError || stream.error?.message || '';
   const loading = stream.isFetching;
-  useEffect(() => setError(''), [fileName]);
+  const video = useRef<HTMLVideoElement>(null);
+
+  function handleError() {
+    setError(
+      'Não foi possível reproduzir o vídeo. Tente novamente ou abra o link no VLC pela biblioteca.',
+    );
+  }
+
+  function handleRetry() {
+    setError('');
+    void stream.refetch();
+  }
 
   return (
     <>
@@ -39,6 +55,7 @@ export function Player() {
       )}
       {link && !error && !loading && (
         <video
+          ref={video}
           key={link.url}
           src={link.url}
           controls
@@ -46,25 +63,21 @@ export function Player() {
           preload="metadata"
           aria-label={`Reproduzir ${name}`}
           className="aspect-video w-full rounded-xl bg-black shadow-sm"
-          onError={() =>
-            setError(
-              'Não foi possível reproduzir o vídeo. O link pode ter expirado ou o formato e os codecs podem ser incompatíveis com este navegador. Tente novamente ou abra o link no VLC pela biblioteca.',
-            )
-          }
+          onError={handleError}
         >
           Seu navegador não oferece suporte à reprodução de vídeo.
         </video>
       )}
+      <Subtitles
+        fileName={fileName}
+        enabled={Boolean(link)}
+        video={video}
+        sourceId={`${link?.url}:${loading}:${Boolean(error)}`}
+      />
       {error && (
         <div role="alert" className="rounded-xl border bg-card p-6">
           <p className="mb-4 text-sm text-destructive">{error}</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setError('');
-              void stream.refetch();
-            }}
-          >
+          <Button variant="outline" onClick={handleRetry}>
             <RefreshCw />
             Tentar novamente
           </Button>

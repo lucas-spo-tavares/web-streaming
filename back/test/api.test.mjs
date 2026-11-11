@@ -15,7 +15,7 @@ beforeEach(() => {
   vi.mocked(ticketSecret).mockResolvedValue('a'.repeat(64));
 });
 
-const key = '12345678-1234-4123-8123-123456789abc--video.mp4';
+const key = '12345678-1234-4123-8123-123456789abc/video.mp4';
 const event = (
   body = { key },
   claims = { sub: 'owner', token_use: 'access', 'cognito:groups': 'owners' },

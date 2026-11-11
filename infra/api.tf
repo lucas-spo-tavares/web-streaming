@@ -1,28 +1,32 @@
 locals {
   operations = {
-    list     = { route = "GET /files", actions = ["s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn] }
-    start    = { route = "POST /uploads", actions = ["s3:PutObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
-    parts    = { route = "POST /uploads/parts", actions = ["s3:PutObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
-    complete = { route = "POST /uploads/complete", actions = ["s3:GetObject", "s3:PutObject", "s3:ListMultipartUploadParts", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
-    abort    = { route = "POST /uploads/abort", actions = ["s3:AbortMultipartUpload"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
-    delete   = { route = "DELETE /files", actions = ["s3:DeleteObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
-    renew    = { route = "POST /files/renew", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
-    download = { route = "POST /download-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
-    short    = { route = "POST /short-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
-    stream   = { route = "POST /stream-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    list      = { route = "GET /files", actions = ["s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn] }
+    start     = { route = "POST /uploads", actions = ["s3:PutObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
+    parts     = { route = "POST /uploads/parts", actions = ["s3:PutObject"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
+    complete  = { route = "POST /uploads/complete", actions = ["s3:GetObject", "s3:PutObject", "s3:ListMultipartUploadParts", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    abort     = { route = "POST /uploads/abort", actions = ["s3:AbortMultipartUpload"], resources = ["${aws_s3_bucket.app["media"].arn}/*"] }
+    delete    = { route = "DELETE /files", actions = ["s3:DeleteObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    renew     = { route = "POST /files/renew", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    download  = { route = "POST /download-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    short     = { route = "POST /short-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    stream    = { route = "POST /stream-links", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    subtitles = { route = "GET /videos/{uuid}/subtitles", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
+    subtitle  = { route = "GET /videos/{uuid}/subtitles/{track}", actions = ["s3:GetObject", "s3:ListBucket"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
   }
   functions = merge(local.operations, {
     cleanup = { route = "", actions = ["s3:ListBucket", "s3:DeleteObject"], resources = [aws_s3_bucket.app["media"].arn, "${aws_s3_bucket.app["media"].arn}/*"] }
   })
   retention_actions = {
-    list     = ["dynamodb:BatchGetItem"]
-    complete = ["dynamodb:GetItem"]
-    stream   = ["dynamodb:GetItem"]
-    short    = ["dynamodb:GetItem"]
-    download = ["dynamodb:GetItem"]
-    renew    = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
-    delete   = ["dynamodb:UpdateItem"]
-    cleanup  = ["dynamodb:BatchGetItem", "dynamodb:UpdateItem"]
+    list      = ["dynamodb:BatchGetItem"]
+    complete  = ["dynamodb:GetItem"]
+    stream    = ["dynamodb:GetItem"]
+    short     = ["dynamodb:GetItem"]
+    download  = ["dynamodb:GetItem"]
+    renew     = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+    delete    = ["dynamodb:UpdateItem"]
+    cleanup   = ["dynamodb:BatchGetItem", "dynamodb:UpdateItem"]
+    subtitles = ["dynamodb:GetItem"]
+    subtitle  = ["dynamodb:GetItem"]
   }
 }
 # The real values are written by init-secrets.mjs, never persisted in Terraform state.
@@ -150,7 +154,7 @@ resource "aws_lambda_permission" "api" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api[each.key].function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.app.execution_arn}/*/${split(" ", each.value.route)[0]}${split(" ", each.value.route)[1]}"
+  source_arn    = "${aws_apigatewayv2_api.app.execution_arn}/*/${split(" ", each.value.route)[0]}${replace(replace(split(" ", each.value.route)[1], "{uuid}", "*"), "{track}", "*")}"
 }
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/apigateway/${var.name}"

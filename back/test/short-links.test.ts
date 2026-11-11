@@ -16,7 +16,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const key = '12345678-1234-4123-8123-123456789abc--video.mp4';
+const key = '12345678-1234-4123-8123-123456789abc/video.mp4';
 const timestamp = Date.now();
 function fixture() {
   const shorten = vi.mocked(shortenUrl).mockResolvedValue('https://link.lucas-tavares.com/abcdef');

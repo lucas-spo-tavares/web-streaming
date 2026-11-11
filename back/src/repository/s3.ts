@@ -9,22 +9,76 @@ import {
   AbortMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as retention from '@/repository/dynamo';
 import { config, required } from '@/config';
 import type { StoredObject, StoredPart } from '@/service';
+import { keySchema } from '@/contracts';
 
 const s3 = new S3Client({ region: config.AWS_REGION, requestChecksumCalculation: 'WHEN_REQUIRED' });
 
+export async function findVideo(uuid: string) {
+  const result = await s3.send(
+    new ListObjectsV2Command({
+      Bucket: required('MEDIA_BUCKET'),
+      Prefix: uuid + '/',
+      MaxKeys: 100,
+    }),
+  );
+  const videos = (result.Contents ?? []).filter(
+    (item) => item.Key && keySchema.safeParse(item.Key).success,
+  );
+  if (result.IsTruncated || videos.length > 1) throw new Error('Invalid video folder');
+  return videos[0]?.Key ? head(videos[0].Key) : null;
+}
+
+export async function readText(Key: string, limit = 2 * 1024 * 1024): Promise<string | null> {
+  try {
+    const result = await s3.send(new GetObjectCommand({ Bucket: required('MEDIA_BUCKET'), Key }));
+    if (!result.Body || result.ContentLength === undefined || result.ContentLength > limit) {
+      await result.Body?.transformToWebStream().cancel();
+      throw new Error('Subtitle object exceeds limit');
+    }
+    return result.Body.transformToString('utf-8');
+  } catch (error) {
+    if (error instanceof Error && error.name === 'NoSuchKey') return null;
+    throw error;
+  }
+}
+
 export async function deleteExpired(Key: string, now: number) {
   if (!(await retention.claimDeletion(Key, now))) return false;
-  await s3.send(new DeleteObjectCommand({ Bucket: required('MEDIA_BUCKET'), Key }));
+  await deleteFolder(Key);
   return true;
 }
 export async function deleteFile(Key: string) {
   await retention.claimDeletion(Key);
-  await s3.send(new DeleteObjectCommand({ Bucket: required('MEDIA_BUCKET'), Key }));
+  await deleteFolder(Key);
+}
+async function deleteFolder(key: string) {
+  keySchema.parse(key);
+  const Bucket = required('MEDIA_BUCKET');
+  const Prefix = `${key.split('/')[0]}/`;
+  // Keep the video until its siblings are gone, so cleanup can discover and retry a failed deletion.
+  let token: string | undefined;
+  do {
+    const page = await s3.send(
+      new ListObjectsV2Command({ Bucket, Prefix, ContinuationToken: token }),
+    );
+    const Objects = (page.Contents ?? [])
+      .filter((item) => item.Key && item.Key !== key)
+      .map((item) => ({ Key: item.Key! }));
+    if (Objects.length) {
+      const result = await s3.send(
+        new DeleteObjectsCommand({ Bucket, Delete: { Objects, Quiet: true } }),
+      );
+      if (result.Errors?.length) throw new Error('Folder deletion incomplete');
+    }
+    token = page.NextContinuationToken;
+  } while (token);
+  await s3.send(new DeleteObjectCommand({ Bucket, Key: key }));
 }
 export async function list(token?: string) {
   const result = await s3.send(
@@ -34,7 +88,9 @@ export async function list(token?: string) {
       ContinuationToken: token,
     }),
   );
-  const objects = (result.Contents ?? []).filter((x) => x.Key && x.LastModified);
+  const objects = (result.Contents ?? []).filter(
+    (x) => x.Key && x.LastModified && keySchema.safeParse(x.Key).success,
+  );
   const records = await retention.batch(objects.map((x) => x.Key!));
   return {
     objects: objects.map((x) => ({
