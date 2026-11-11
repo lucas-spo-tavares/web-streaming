@@ -1,5 +1,5 @@
 // Shared upload policy: known video extensions and compatible declared MIME types.
-const formats = {
+const formats: Record<string, string[]> = {
   mp4: ['video/mp4'],
   m4v: ['video/mp4', 'video/x-m4v'],
   webm: ['video/webm'],
@@ -16,9 +16,9 @@ const formats = {
   '3g2': ['video/3gpp2'],
 };
 export const VIDEO_ACCEPT = ['video/*', ...Object.keys(formats).map((ext) => `.${ext}`)].join(',');
-export function videoContentType(name, contentType = '') {
+export function videoContentType(name: string, contentType = '') {
   const extension = name.split('.').at(-1)?.toLowerCase();
-  const types = Object.hasOwn(formats, extension) ? formats[extension] : undefined;
+  const types = extension && Object.hasOwn(formats, extension) ? formats[extension] : undefined;
   if (!types) return null;
   const mime = contentType.trim().toLowerCase();
   if (!mime || mime === 'application/octet-stream') return types[0];

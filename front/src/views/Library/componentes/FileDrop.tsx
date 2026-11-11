@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
-import { videoContentType } from '../../../../../config/video.mjs';
+import { videoContentType } from '../../../../../config/video.ts';
 
 interface FileDropProps {
   onFiles: (files: File[]) => void;

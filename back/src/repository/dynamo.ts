@@ -5,9 +5,9 @@ import {
   UpdateItemCommand,
   type AttributeValue,
 } from '@aws-sdk/client-dynamodb';
-import { required } from '../config.js';
+import { config, required } from '@/config';
 
-const dynamo = new DynamoDBClient({});
+const dynamo = new DynamoDBClient({ region: config.AWS_REGION });
 
 export interface RetentionRecord {
   expires?: Date;

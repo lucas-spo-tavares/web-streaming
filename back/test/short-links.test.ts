@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { shortenLink } from '../src/short-links';
-import { handleRequest } from '../src/handler';
-import { shorten as shortenUrl, signStream, mediaDomain } from '../src/aws';
-import * as s3Repository from '../src/repository/s3';
+import { shortenLink } from '@/short-links';
+import { handleRequest } from '@/handler';
+import { shorten as shortenUrl, signStream, mediaDomain } from '@/aws';
+import * as s3Repository from '@/repository/s3';
 
-vi.mock('../src/aws');
-vi.mock('../src/repository/s3');
+vi.mock('@/aws');
+vi.mock('@/repository/s3');
 
 beforeEach(() => {
   vi.resetAllMocks();

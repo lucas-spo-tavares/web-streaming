@@ -3,7 +3,7 @@ import { writeFileSync, renameSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname, basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { FRONT_KEYS, validateFront, assertValid } from '../config/environment.mjs';
+import { FRONT_KEYS, validateFront, assertValid } from '../config/environment.ts';
 export function writeFrontEnv(outputs, destination = 'front/.env.local') {
   assertValid(validateFront(outputs));
   const temporary = join(dirname(destination), `.${basename(destination)}.${randomUUID()}.tmp`);

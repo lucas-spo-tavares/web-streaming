@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { validateFront, validateBackend } from '../config/environment.mjs';
+import { validateFront, validateBackend } from '../config/environment.ts';
 import { validateDeploy } from './deploy-env.mjs';
 import { loadEnvFile } from './env-lib.mjs';
 export function checkEnvironment(args, inherited = process.env) {

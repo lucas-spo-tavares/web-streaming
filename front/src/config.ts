@@ -1,16 +1,12 @@
-import { validateFront } from '../../config/environment.mjs';
+import { validateFront } from '../../config/environment.ts';
 
-export interface AppConfig {
-  apiUrl: string;
-  clientId: string;
-  region: string;
-}
-
-export const config: AppConfig = {
+export const config = {
   apiUrl: (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, ''),
   clientId: import.meta.env.VITE_CLIENT_ID ?? '',
   region: import.meta.env.VITE_AWS_REGION ?? '',
 };
+
+export type AppConfig = typeof config;
 
 export const isConfigured =
   validateFront({

@@ -27,7 +27,7 @@ Todos os campos são **públicos**, obrigatórios para conectar o app e não pos
 
 | `VITE_AWS_REGION` | Região do Cognito, por exemplo `sa-east-1` |
 
-Depois de provisionar, `node scripts/write-front-env.mjs` gera `front/.env.local` usando somente esses três campos, com validação antes de substituir o arquivo. Outros outputs/segredos são descartados. Uma falha preserva a configuração anterior. Não colocar credenciais AWS, senha, conteúdo de chaves ou valores do Parameter Store em variáveis `VITE_*`.
+Depois de provisionar, `node --experimental-strip-types scripts/write-front-env.mjs` gera `front/.env.local` usando somente esses três campos, com validação antes de substituir o arquivo. Outros outputs/segredos são descartados. Uma falha preserva a configuração anterior. Não colocar credenciais AWS, senha, conteúdo de chaves ou valores do Parameter Store em variáveis `VITE_*`.
 
 ```sh
 npm run env:check -- --target front --file front/.env.local
@@ -40,7 +40,7 @@ O login usa `USER_AUTH` com `EMAIL_OTP` na própria página, sem senha ou redire
 
 ## Backend
 
-`back/.env.local` serve para validação, sem iniciar API local. Na AWS, o Terraform injeta as variáveis e o runtime fornece `AWS_REGION`. ARNs são referências e não contêm o valor de segredos.
+`back/.env.local` é carregado pelo Vite em modos diferentes de `production`, sem iniciar API local. Para gerar um bundle local com esses valores, use `npm run build -w back -- --mode development`. O build de produção mantém as leituras das envs em runtime, sem incorporar o arquivo local. Na AWS, o Terraform injeta as variáveis e o runtime fornece `AWS_REGION`. ARNs são referências e não contêm o valor de segredos.
 
 | Variável                | Obrigatória em     | Padrão/origem                                                                                                              | Sensibilidade         |
 | ----------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | --------------------- |
@@ -63,6 +63,8 @@ npm run env:check -- --target backend --file back/.env.local --operation stream
 ```
 
 `--operation` substitui somente a operação durante a validação; não altera o arquivo nem a Lambda.
+
+Os tipos de `import.meta.env` ficam em `src/vite-env.d.ts` de cada workspace. A configuração infere seus tipos dessas declarações. Os módulos compartilhados em `config/` usam TypeScript com tipos e implementação no mesmo arquivo. Scripts Node que os importam usam `--experimental-strip-types`, necessário no Node 22.16.
 
 ## Deploy
 

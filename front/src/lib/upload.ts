@@ -1,5 +1,5 @@
 import { start, parts as getParts, complete, abort } from '@/services/uploads';
-import { videoContentType } from '../../../config/video.mjs';
+import { videoContentType } from '../../../config/video.ts';
 import { ApiError, type UploadSession } from '@/services/types';
 
 const MAX_UPLOAD_BYTES = 20 * 1024 ** 3;

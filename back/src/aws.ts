@@ -1,12 +1,12 @@
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { getSignedUrl as signCloudFront } from '@aws-sdk/cloudfront-signer';
-import { ApiError } from './core.js';
-import { shortenLink } from './short-links.js';
-import { assertValid, validateBackend } from '../../config/environment.mjs';
-import { required } from './config.js';
-import { MAX_BYTES } from './contracts.js';
+import { ApiError } from '@/core';
+import { shortenLink } from '@/short-links';
+import { assertValid, validateBackend } from '../../config/environment.ts';
+import { config, required } from '@/config';
+import { MAX_BYTES } from '@/contracts';
 
-const secrets = new SSMClient({});
+const secrets = new SSMClient({ region: config.AWS_REGION });
 const cached = new Map<string, { value: string; until: number }>();
 
 export async function secretValue(arn: string) {
@@ -29,7 +29,7 @@ export async function secretValue(arn: string) {
 }
 
 export function validateConfiguration() {
-  assertValid(validateBackend(process.env));
+  assertValid(validateBackend(config));
 }
 
 export async function shorten(url: string, expiresAt: string, code?: string) {
@@ -40,11 +40,11 @@ export async function shorten(url: string, expiresAt: string, code?: string) {
 }
 
 export function mediaDomain() {
-  return process.env.MEDIA_DOMAIN ?? '';
+  return config.MEDIA_DOMAIN ?? '';
 }
 
 export function maxBytes() {
-  return Number(process.env.MAX_UPLOAD_BYTES ?? MAX_BYTES);
+  return Number(config.MAX_UPLOAD_BYTES ?? MAX_BYTES);
 }
 
 export async function ticketSecret() {

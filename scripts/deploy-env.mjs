@@ -7,7 +7,7 @@ import {
   isHostname,
   isIntegerIn,
   MAX_UPLOAD_BYTES,
-} from '../config/environment.mjs';
+} from '../config/environment.ts';
 
 export function readRsaFile(path, kind, variable) {
   try {

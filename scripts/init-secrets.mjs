@@ -4,7 +4,7 @@ import { SSMClient, GetParameterCommand, PutParameterCommand } from '@aws-sdk/cl
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { readRsaFile } from './deploy-env.mjs';
-import { isParameterArn } from '../config/environment.mjs';
+import { isParameterArn } from '../config/environment.ts';
 
 // Initialize only placeholders; preserve existing keys when this script is rerun.
 export async function initializeSecrets({

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { mediaDomain, ticketSecret, signStream } from '../src/aws';
-import { renew, list, stream, download, expireFiles, type StoredObject } from '../src/service';
-import * as retention from '../src/repository/dynamo';
-import * as s3Repository from '../src/repository/s3';
-import { RETENTION_MS } from '../src/contracts';
+import { mediaDomain, ticketSecret, signStream } from '@/aws';
+import { renew, list, stream, download, expireFiles, type StoredObject } from '@/service';
+import * as retention from '@/repository/dynamo';
+import * as s3Repository from '@/repository/s3';
+import { RETENTION_MS } from '@/contracts';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 
-vi.mock('../src/aws');
-vi.mock('../src/repository/s3');
+vi.mock('@/aws');
+vi.mock('@/repository/s3');
 
 afterEach(() => {
   vi.restoreAllMocks();

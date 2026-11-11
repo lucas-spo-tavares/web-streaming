@@ -1,4 +1,4 @@
-import { ApiError } from './core.js';
+import { ApiError } from '@/core';
 
 const origin = 'https://link.lucas-tavares.com';
 

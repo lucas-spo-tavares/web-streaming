@@ -72,7 +72,7 @@ No primeiro provisionamento, inserir segredos diretamente no Parameter Store:
 
 ```sh
 npm run env:check -- --target deploy --stage secrets --file .env.deploy
-node scripts/with-env.mjs .env.deploy node scripts/init-secrets.mjs
+node scripts/with-env.mjs .env.deploy node --experimental-strip-types scripts/init-secrets.mjs
 ```
 
 O script usa `ACERVO_SIGNING_PRIVATE_KEY_PATH` e mantém compatibilidade com argumento posicional explícito, que tem prioridade. Ele nunca imprime valores de segredos. Ele preenche apenas os marcadores do primeiro setup e preserva segredos já inicializados. Terraform cria parâmetros `SecureString`, no nível `Standard`, usando `alias/aws/ssm` e um marcador via `value_wo` (Terraform 1.11+), sem persistir valores secretos no state/outputs. Não alterar `value_wo_version` durante deploys: isso repõe o marcador. A Lambda recusa parâmetros ainda não inicializados. O perfil de setup precisa de `ssm:GetParameter` e `ssm:PutParameter` nesses parâmetros.
@@ -111,7 +111,7 @@ A configuração de domínio/login hospedado anterior permanece no Terraform par
 Depois do apply, gerar a configuração pública e reconstruir. O gerador usa apenas a allowlist de três `VITE_*`, sem copiar o ambiente de deploy para o browser.
 
 ```sh
-node scripts/with-env.mjs .env.deploy node scripts/write-front-env.mjs
+node scripts/with-env.mjs .env.deploy node --experimental-strip-types scripts/write-front-env.mjs
 npm run env:check -- --target front --file front/.env.local
 npm run build
 node scripts/with-env.mjs .env.deploy node --input-type=module -e '

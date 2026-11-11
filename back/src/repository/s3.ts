@@ -11,11 +11,11 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import * as retention from './dynamo.js';
-import { required } from '../config.js';
-import type { StoredObject, StoredPart } from '../service.js';
+import * as retention from '@/repository/dynamo';
+import { config, required } from '@/config';
+import type { StoredObject, StoredPart } from '@/service';
 
-const s3 = new S3Client({ requestChecksumCalculation: 'WHEN_REQUIRED' });
+const s3 = new S3Client({ region: config.AWS_REGION, requestChecksumCalculation: 'WHEN_REQUIRED' });
 
 export async function deleteExpired(Key: string, now: number) {
   if (!(await retention.claimDeletion(Key, now))) return false;

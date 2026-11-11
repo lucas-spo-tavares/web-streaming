@@ -1,6 +1,7 @@
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { ZodError } from 'zod';
-import { ApiError } from './core.js';
+import { config } from '@/config';
+import { ApiError } from '@/core';
 import {
   list,
   start,
@@ -13,8 +14,8 @@ import {
   stream,
   short,
   expireFiles,
-} from './service.js';
-import { validateConfiguration } from './aws.js';
+} from '@/service';
+import { validateConfiguration } from '@/aws';
 
 type Event = APIGatewayProxyEventV2WithJWTAuthorizer;
 const service = {
@@ -111,7 +112,7 @@ export async function handleRequest(
 }
 
 export async function handler(event: Event) {
-  return handleRequest(event, process.env.OPERATION);
+  return handleRequest(event, config.OPERATION);
 }
 
 export async function cleanup() {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { videoContentType } from '../../config/video.mjs';
+import { videoContentType } from '../../config/video.ts';
 
 export const MAX_BYTES = 20 * 1024 ** 3;
 export const PART_BYTES = 16 * 1024 ** 2;

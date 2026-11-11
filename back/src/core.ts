@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { keySchema, LINK_MS, RETENTION_MS, type VideoFile } from './contracts.js';
+import { keySchema, LINK_MS, RETENTION_MS, type VideoFile } from '@/contracts';
 
 export class ApiError extends Error {
   constructor(

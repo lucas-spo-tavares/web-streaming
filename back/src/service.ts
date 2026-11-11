@@ -1,13 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import {
-  shorten,
-  mediaDomain,
-  maxBytes as uploadMaxBytes,
-  ticketSecret,
-  signStream,
-} from './aws.js';
-import * as s3Repository from './repository/s3.js';
-import * as dynamoRepository from './repository/dynamo.js';
+import { shorten, mediaDomain, maxBytes as uploadMaxBytes, ticketSecret, signStream } from '@/aws';
+import * as s3Repository from '@/repository/s3';
+import * as dynamoRepository from '@/repository/dynamo';
 import {
   abortSchema,
   completeSchema,
@@ -22,7 +16,7 @@ import {
   startSchema,
   streamSchema,
   shortSchema,
-} from './contracts.js';
+} from '@/contracts';
 import {
   ApiError,
   encodeKey,
@@ -34,7 +28,7 @@ import {
   readUpload,
   seal,
   type UploadTicket,
-} from './core.js';
+} from '@/core';
 
 export interface StoredObject {
   key: string;

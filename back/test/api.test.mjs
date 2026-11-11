@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test, vi } from 'vitest';
-import * as s3Repository from '../src/repository/s3.ts';
-import { maxBytes, ticketSecret } from '../src/aws.ts';
-import { MAX_BYTES } from '../src/contracts.ts';
-import { handleRequest } from '../src/handler.ts';
-import { validateBackend } from '../../config/environment.mjs';
+import * as s3Repository from '@/repository/s3';
+import { maxBytes, ticketSecret } from '@/aws';
+import { MAX_BYTES } from '@/contracts';
+import { handleRequest } from '@/handler';
+import { validateBackend } from '../../config/environment.ts';
 
-vi.mock('../src/aws');
-vi.mock('../src/repository/s3');
+vi.mock('@/aws');
+vi.mock('@/repository/s3');
 
 beforeEach(() => {
   vi.resetAllMocks();

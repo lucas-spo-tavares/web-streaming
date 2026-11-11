@@ -17,12 +17,12 @@ export function deploy(target, run = execFileSync) {
     execute('terraform', ['-chdir=infra', 'fmt', '-check', '-recursive']);
     execute('terraform', ['-chdir=infra', 'validate']);
     execute('terraform', ['-chdir=infra', 'apply', '-input=false', '-auto-approve']);
-    execute('node', ['scripts/init-secrets.mjs']);
+    execute('node', ['--experimental-strip-types', 'scripts/init-secrets.mjs']);
     return;
   }
   if (target !== 'front') throw new Error('Uso: node scripts/deploy.mjs back|front');
 
-  execute('node', ['scripts/write-front-env.mjs']);
+  execute('node', ['--experimental-strip-types', 'scripts/write-front-env.mjs']);
   execute('npm', ['run', 'env:check', '--', '--target', 'front', '--file', 'front/.env.local']);
   execute('npm', ['run', 'build', '-w', 'front']);
   const bucket = output('frontend_bucket');

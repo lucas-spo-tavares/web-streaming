@@ -7,7 +7,10 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "types": ["vite/client"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "vite.config.ts"]
 }

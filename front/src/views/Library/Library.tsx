@@ -6,7 +6,7 @@ import { useUploadJob } from '@/server-state/uploads';
 import { useCreateStreamLink, useCreateShortLink } from '@/server-state/stream-links';
 import { useDownloadLink } from '@/server-state/download-links';
 import { Outlet, useMatch } from 'react-router';
-import { VIDEO_ACCEPT } from '../../../../config/video.mjs';
+import { VIDEO_ACCEPT } from '../../../../config/video.ts';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,

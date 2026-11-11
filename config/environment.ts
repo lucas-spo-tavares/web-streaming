@@ -1,3 +1,12 @@
+export interface Environment {
+  [key: string]: string | undefined;
+}
+export interface Issue {
+  name: string;
+  message: string;
+}
+type Rules = Record<string, { check: (value: string) => boolean; message: string }>;
+
 // Pure validation shared by CLI, Vite and Lambda. No filesystem, process or network access.
 export const FRONT_KEYS = ['VITE_API_URL', 'VITE_CLIENT_ID', 'VITE_AWS_REGION'];
 export const OPERATIONS = [
@@ -16,8 +25,9 @@ export const OPERATIONS = [
 export const MAX_UPLOAD_BYTES = 21474836480;
 export const REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d+$/;
 const placeholder = /PREENCHA|REPLACE_ME|YOUR_|EXAMPLE|[<>]/i;
-const present = (value) => typeof value === 'string' && value.trim().length > 0;
-export function validateFields(env, rules) {
+const present = (value: string | undefined): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+export function validateFields(env: Environment, rules: Rules): Issue[] {
   const issues = [];
   for (const [name, rule] of Object.entries(rules)) {
     const value = env[name];
@@ -26,27 +36,27 @@ export function validateFields(env, rules) {
   }
   return issues;
 }
-export function isRegion(value) {
+export function isRegion(value: string) {
   return REGION_PATTERN.test(value);
 }
-export function isBucket(value) {
+export function isBucket(value: string) {
   return (
     /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(value) &&
     !value.includes('..') &&
     !/^\d+\.\d+\.\d+\.\d+$/.test(value)
   );
 }
-export function isHostname(value) {
+export function isHostname(value: string) {
   return (
     value.length <= 253 &&
     value.includes('.') &&
     value.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))
   );
 }
-export function isParameterArn(value) {
+export function isParameterArn(value: string) {
   return /^arn:aws(?:-us-gov|-cn)?:ssm:[a-z0-9-]+:\d{12}:parameter\/[a-zA-Z0-9/_.-]+$/.test(value);
 }
-export function isIntegerIn(value, min, max) {
+export function isIntegerIn(value: string, min: number, max: number) {
   return (
     /^\d+$/.test(value) &&
     Number.isSafeInteger(Number(value)) &&
@@ -54,7 +64,7 @@ export function isIntegerIn(value, min, max) {
     Number(value) <= max
   );
 }
-function isOrigin(value, local = false) {
+function isOrigin(value: string, local = false) {
   try {
     const url = new URL(value);
     return (
@@ -73,7 +83,7 @@ function isOrigin(value, local = false) {
     return false;
   }
 }
-export function validateFront(env) {
+export function validateFront(env: Environment) {
   return validateFields(env, {
     VITE_API_URL: {
       check: (value) => isOrigin(value, true),
@@ -89,8 +99,8 @@ export function validateFront(env) {
     },
   });
 }
-export function validateBackend(env, operation = env.OPERATION) {
-  const rules = {
+export function validateBackend(env: Environment, operation = env.OPERATION) {
+  const rules: Rules = {
     OPERATION: {
       check: (value) => OPERATIONS.includes(value),
       message:
@@ -106,7 +116,7 @@ export function validateBackend(env, operation = env.OPERATION) {
       message: 'Informe a região AWS; na Lambda esse valor vem do runtime.',
     },
   };
-  if (['stream', 'short'].includes(operation)) {
+  if (['stream', 'short'].includes(operation ?? '')) {
     rules.MEDIA_DOMAIN = {
       check: isHostname,
       message: 'Informe o hostname CloudFront sem esquema nem caminho.',
@@ -119,7 +129,7 @@ export function validateBackend(env, operation = env.OPERATION) {
       check: (value) => /^[a-zA-Z0-9]{1,128}$/.test(value),
       message: 'Informe o ID da chave pública CloudFront.',
     };
-  } else if (['list', 'start', 'parts', 'complete', 'abort'].includes(operation)) {
+  } else if (['list', 'start', 'parts', 'complete', 'abort'].includes(operation ?? '')) {
     rules.TICKET_PARAMETER_ARN = {
       check: isParameterArn,
       message: 'Informe o ARN do segredo HMAC de tickets.',
@@ -139,7 +149,7 @@ export function validateBackend(env, operation = env.OPERATION) {
     issues.push({ name: 'MAX_UPLOAD_BYTES', message: 'Use inteiro de 1 a 21474836480 bytes.' });
   return issues;
 }
-export function assertValid(issues) {
+export function assertValid(issues: Issue[]) {
   if (issues.length)
     throw new Error(issues.map((issue) => `${issue.name}: ${issue.message}`).join('\n'));
 }

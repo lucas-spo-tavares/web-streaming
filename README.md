@@ -67,7 +67,7 @@ O login usa `USER_AUTH` com `EMAIL_OTP` na própria página, sem senha ou redire
 
 ### Back
 
-O workspace `back/` usa TypeScript, Node.js 22, AWS SDK v3 e Zod. O esbuild gera `back/dist/handler.cjs`, empacotado pelo Terraform para as Lambdas.
+O workspace `back/` usa TypeScript, Node.js 22, AWS SDK v3 e Zod. O Vite gera `back/dist/handler.cjs`, empacotado pelo Terraform para as Lambdas.
 
 Todas as rotas exigem um access token válido do Cognito, associação ao grupo `owners`.
 
@@ -257,7 +257,7 @@ O apply cria recursos AWS sujeitos a cobrança. Aguarde a emissão do certificad
 
 ```sh
 npm run env:check -- --target deploy --stage secrets
-node scripts/init-secrets.mjs
+node --experimental-strip-types scripts/init-secrets.mjs
 ```
 
 O script lê a chave privada de `ACERVO_SIGNING_PRIVATE_KEY_PATH`, obtém os ARNs pelos outputs e grava a chave e um segredo HMAC como `SecureString` no Parameter Store, no nível `Standard`, com a chave KMS gerenciada `alias/aws/ssm`. Valores já inicializados são preservados.
@@ -289,7 +289,7 @@ Com EMAIL_OTP já habilitado pelo apply, o usuário é criado sem senha temporá
 Gere a configuração pública a partir dos recursos provisionados e faça um novo build:
 
 ```sh
-node scripts/write-front-env.mjs
+node --experimental-strip-types scripts/write-front-env.mjs
 npm run env:check -- --target front --file front/.env.local
 npm run build
 
@@ -356,7 +356,7 @@ Na sessão com `.env.deploy` carregado:
 npm run check
 terraform -chdir=infra plan -out=otp.tfplan
 terraform -chdir=infra apply otp.tfplan
-node scripts/write-front-env.mjs
+node --experimental-strip-types scripts/write-front-env.mjs
 npm run build
 ```
 
